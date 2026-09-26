@@ -122,6 +122,11 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .reactBar{display:flex;gap:.3rem}
 .reactBar button{background:transparent;border:1px solid var(--line);border-radius:8px;font-size:1.15rem;width:2.1rem;height:2.1rem;cursor:pointer;line-height:1}
 .reactBar button:hover{background:var(--panel2)}
+.reactGridWrap{margin-top:.6rem}
+.reactGrid{display:grid;grid-template-columns:repeat(10,1fr);gap:.25rem;max-height:14rem;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:.6rem}
+.reactGrid button{background:transparent;border:0;font-size:1.3rem;padding:.35rem 0;border-radius:8px;cursor:pointer;line-height:1}
+.reactGrid button:hover{background:var(--panel2)}
+@media (max-width:520px){.reactGrid{grid-template-columns:repeat(6,1fr)}}
 .reactPickGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:.35rem}
 .reactPick{background:var(--bg);border:1px solid var(--line);border-radius:10px;font-size:1.35rem;padding:.5rem;cursor:pointer;line-height:1}
 .reactPick.on{border-color:var(--accent);background:var(--panel2)}
@@ -315,6 +320,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
           <button class="btn ghost small" id="fsBtn" type="button">เต็มจอ</button>
           <button class="btn" id="playPauseBtn" type="button" disabled>▶ เล่น</button>
           <div class="reactBar" id="reactBar"></div>
+          <button class="btn ghost small" id="reactExpandBtn" type="button" title="ดูอิโมจิทั้งหมด">▾</button>
           <button class="btn ghost small" id="reactEditBtn" type="button" title="เลือกอิโมจิลัด">✎</button>
           <span class="muted" id="hostInfo"></span>
           <div class="volCtrl">
@@ -324,15 +330,16 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
             <span class="muted">%</span>
           </div>
         </div>
+        <div class="reactGridWrap" id="reactGridWrap" hidden>
+          <div class="reactGrid" id="reactGrid"></div>
+        </div>
         <div class="roomtools">
           <p id="lastAction" class="muted"></p>
           <div class="row" id="voteRow">
             <button class="btn ghost small" id="transferHostBtn" type="button" hidden>โอนหัวหน้าห้อง</button>
             <button class="btn ghost" id="startVoteBtn" type="button">เปิดโหวตหัวหน้าห้อง</button>
-            <span class="muted" id="voteStatus" hidden></span>
-          </div>
-          <div class="row" id="skipVoteRow">
             <button class="btn ghost" id="openSkipVoteBtn" type="button">เปิดโหวตข้าม</button>
+            <span class="muted" id="voteStatus" hidden></span>
           </div>
           <h3>ที่นั่ง (<span id="seatCount">0</span> คน)</h3>
           <ul class="seats" id="seats"></ul>
@@ -493,7 +500,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.22"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.23"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -808,6 +815,7 @@ async function openRoom(id) {
   $("#seekSlider").disabled = true; $("#seekSlider").value = 0; $("#curTime").textContent = "0:00"; $("#durTime").textContent = "0:00";
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
   $("#openSkipVoteBtn").hidden = false; $("#openSkipVoteBtn").disabled = true;
+  $("#reactGridWrap").hidden = true; $("#reactExpandBtn").textContent = "▾";
   if ($("#skipVoteDlg").open) $("#skipVoteDlg").close();
   room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null, historyItems: [], skipVote: null };
   const r = room;
@@ -1068,7 +1076,13 @@ $("#muteBtn").addEventListener("click", () => {
 });
 
 /* ---------- รีแอ็คชั่นอิโมจิลอย ---------- */
-const REACT_EMOJIS = ["😂", "❤️", "😮", "😢", "😡", "👍", "👎", "🔥", "🎉", "😱", "😍", "🤔", "👏", "💀", "😴", "🥹", "🙌", "✨", "💯", "😭", "🤣", "😅", "🫡", "😎", "🥳"];
+const REACT_EMOJIS = ["😂", "❤️", "😮", "😢", "😡", "👍", "👎", "🔥", "🎉", "😱", "😍", "🤔", "👏", "💀", "😴", "🥹", "🙌", "✨", "💯", "😭", "🤣", "😅", "🫡", "😎", "🥳", "😊", "🙂", "😁", "😆", "😇", "🥰", "😘", "😙", "😋", "😛", "😝", "🤪", "🤨", "🧐", "🤓", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😤", "😠", "🤬", "😨", "😰", "😥", "😓", "🤗", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😲", "🥱", "😪", "😵", "🤯", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "💩", "🤡", "👻", "☠️", "👽", "🤖", "🎃", "🙏", "💪", "👀", "💔", "⭐"];
+$("#reactGrid").innerHTML = REACT_EMOJIS.map(em => `<button type="button" data-emoji="${em}">${em}</button>`).join("");
+$("#reactGrid").addEventListener("click", e => { const b = e.target.closest("[data-emoji]"); if (b) sendReaction(b.dataset.emoji); });
+$("#reactExpandBtn").addEventListener("click", () => {
+  const open = $("#reactGridWrap").hidden; $("#reactGridWrap").hidden = !open;
+  $("#reactExpandBtn").textContent = open ? "▴" : "▾";
+});
 const DEFAULT_SHORTCUTS = ["😂", "❤️", "🔥", "👍", "😱"];
 function loadReactShortcuts() { try { const s = JSON.parse(localStorage.getItem("reactShortcuts") || "null"); return Array.isArray(s) && s.length ? s.slice(0, 5) : DEFAULT_SHORTCUTS; } catch { return DEFAULT_SHORTCUTS; } }
 function saveReactShortcuts(list) { try { localStorage.setItem("reactShortcuts", JSON.stringify(list)); } catch { } }
