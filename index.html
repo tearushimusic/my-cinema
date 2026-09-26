@@ -113,9 +113,29 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1);animation:curtainR .
 .row>.btn{flex:0 0 auto}
 
 /* โรงหนัง */
-.stage{position:relative;aspect-ratio:16/9;background:#000;border:2px solid var(--brass2);border-radius:6px;box-shadow:0 0 0 6px var(--bg2),0 24px 60px rgba(0,0,0,.55);overflow:hidden}
+#stageDock{position:fixed;z-index:40;display:none;transition:top .3s cubic-bezier(.2,.8,.2,1),left .3s cubic-bezier(.2,.8,.2,1),width .3s cubic-bezier(.2,.8,.2,1),height .3s cubic-bezier(.2,.8,.2,1),border-radius .3s ease,box-shadow .3s ease}
+#stageDock.active{display:block}
+#stageDock.mini{border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+.stage{position:relative;width:100%;height:100%;background:#000;border:2px solid var(--brass2);border-radius:inherit;box-shadow:0 0 0 6px var(--bg2);overflow:hidden}
+#stageDock:not(.mini) .stage{box-shadow:0 0 0 6px var(--bg2),0 24px 60px rgba(0,0,0,.55)}
 .stage #playerHolder,.stage #playerHolder iframe{position:absolute;inset:0;width:100%;height:100%}
 .overlay{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:1rem;background:rgba(42,13,22,.92);z-index:2}
+.miniBar{display:none;position:absolute;top:0;left:0;right:0;z-index:3;background:rgba(0,0,0,.6);color:#fff;align-items:center;gap:.3rem;padding:.25rem .4rem}
+#stageDock.mini .miniBar{display:flex}
+.miniBar span{flex:1;font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.miniBar button{background:transparent;border:0;color:#fff;cursor:pointer;font-size:.95rem;padding:.15rem .35rem;line-height:1}
+.miniBar button:hover{background:rgba(255,255,255,.15);border-radius:4px}
+#stageDock.mini #joinOverlay,#stageDock.mini #emptyOverlay{display:none}
+#roomStageSlot{aspect-ratio:16/9;margin-bottom:1.4rem}
+
+/* เพลย์ลิสต์ส่วนตัว */
+.plCard{display:flex;align-items:center;gap:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.9rem 1.1rem;margin-bottom:.8rem;cursor:pointer}
+.plCard:hover{background:var(--panel2)}
+.plCard .n{flex:1}
+.plCard .n b{display:block;font-size:1.05rem}
+.plItem{display:flex;align-items:center;gap:.6rem;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem;margin-bottom:.5rem}
+.plItem .info{flex:1;min-width:0}
+.plItem .info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .overlay .btn{padding:.8rem 1.6rem;font-size:1.1rem}
 .roomtools{margin-top:1.4rem}
 .seats{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.5rem}
@@ -176,6 +196,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
   <a class="brand" href="#/"><img id="brandLogo" alt="" hidden><span id="brandName">โรงหนังของเรา</span></a>
   <nav>
     <a class="nav" href="#/">โรงหนัง</a>
+    <a class="nav" href="#/playlists">เพลย์ลิสต์ของฉัน</a>
     <a class="nav" id="navSettings" href="#/settings" hidden>ตั้งค่า</a>
     <span class="connStatus connecting" id="connStatus"><i></i><span id="connLbl">กำลังเชื่อมต่อ...</span></span>
     <button class="iconBtn" id="refreshBtn" type="button" title="รีเฟรชข้อมูล" aria-label="รีเฟรชข้อมูล">↻</button>
@@ -192,6 +213,26 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
     </div>
   </nav>
 </header>
+
+<!-- กล่องวิดีโอ: อยู่นอกหน้าเสมอ เพื่อย่อเป็นป็อปอัพลอยได้เวลาออกจากหน้าโรงหนัง -->
+<div id="stageDock">
+  <div class="stage" id="stage">
+    <div id="playerHolder"></div>
+    <div id="ytProbeHolder" style="position:fixed;left:-9999px;top:-9999px;width:200px;height:200px"></div>
+    <div class="overlay" id="joinOverlay">
+      <div>
+        <p id="joinText">กดปุ่มเพื่อเข้านั่งในโรง คลิปจะตรงกับเพื่อนทุกคน</p>
+        <button class="btn" id="joinBtn" type="button">เข้าร่วมดูพร้อมกัน</button>
+      </div>
+    </div>
+    <div class="overlay" id="emptyOverlay" hidden><p class="muted">ยังไม่มีคลิปในโรงนี้ วางลิงก์ YouTube ด้านล่างเพื่อเริ่มดู</p></div>
+    <div class="miniBar" id="miniBar">
+      <span id="miniTitle"></span>
+      <button type="button" id="miniExpand" title="กลับไปดูเต็มจอ">⤢</button>
+      <button type="button" id="miniClose" title="ปิด">✕</button>
+    </div>
+  </div>
+</div>
 
 <!-- ล็อกอิน -->
 <section id="view-login">
@@ -228,17 +269,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <section id="view-room" hidden>
   <div class="wrap">
     <div class="head"><h2 id="roomTitle"></h2><span class="muted">ทุกคนในโรงควบคุมคลิปได้</span></div>
-    <div class="stage">
-      <div id="playerHolder"></div>
-      <div id="ytProbeHolder" style="position:fixed;left:-9999px;top:-9999px;width:200px;height:200px"></div>
-      <div class="overlay" id="joinOverlay">
-        <div>
-          <p>กดปุ่มเพื่อเข้านั่งในโรง คลิปจะตรงกับเพื่อนทุกคน</p>
-          <button class="btn" id="joinBtn" type="button">เข้าร่วมดูพร้อมกัน</button>
-        </div>
-      </div>
-      <div class="overlay" id="emptyOverlay" hidden><p class="muted">ยังไม่มีคลิปในโรงนี้ วางลิงก์ YouTube ด้านล่างเพื่อเริ่มดู</p></div>
-    </div>
+    <div id="roomStageSlot"></div>
     <div class="roomtools">
       <form class="row" id="videoForm">
         <div><label for="vUrl">ลิงก์ YouTube</label><input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
@@ -246,6 +277,10 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
         <button class="btn ghost" id="syncBtn" type="button">ซิงก์ฉัน</button>
         <button class="btn ghost" id="fsBtn" type="button">เต็มจอ</button>
       </form>
+      <div class="row" id="fromPlaylistRow" hidden>
+        <div><label for="pickPlaylist">เพิ่มจากเพลย์ลิสต์ของฉัน</label><select id="pickPlaylist"></select></div>
+        <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
+      </div>
       <p id="lastAction" class="muted"></p>
       <h3>กำลังฉาย</h3>
       <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
@@ -254,6 +289,25 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
       <h3>ที่นั่ง (<span id="seatCount">0</span> คน)</h3>
       <ul class="seats" id="seats"></ul>
     </div>
+  </div>
+</section>
+
+<!-- เพลย์ลิสต์ส่วนตัว -->
+<section id="view-playlists" hidden>
+  <div class="wrap" id="plListWrap">
+    <div class="head"><h2>เพลย์ลิสต์ของฉัน</h2>
+      <button class="btn" id="addPlaylistBtn" type="button">+ สร้างเพลย์ลิสต์</button></div>
+    <div id="plList"></div>
+  </div>
+  <div class="wrap" id="plDetailWrap" hidden>
+    <div class="head"><button class="btn ghost small" id="plBackBtn" type="button">← กลับ</button>
+      <h2 id="plDetailName" style="flex:1"></h2>
+      <button class="btn danger small" id="plDeleteBtn" type="button">ลบเพลย์ลิสต์</button></div>
+    <form class="row" id="plAddForm">
+      <div><label for="plUrl">ลิงก์ YouTube</label><input id="plUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
+      <button class="btn" type="submit">เพิ่มในเพลย์ลิสต์</button>
+    </form>
+    <div id="plItems" style="margin-top:1rem"></div>
   </div>
 </section>
 
@@ -344,7 +398,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.5"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.6"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -402,7 +456,7 @@ function applySite() {
 async function loadSite() { try { const s = await getDoc(doc(db, "settings", "site")); site = s.exists() ? s.data() : {}; } catch { site = {}; } applySite(); }
 
 /* ---------- หน้า/เส้นทาง ---------- */
-function show(v) { for (const n of ["login", "hub", "room", "settings"]) $("#view-" + n).hidden = n !== v; document.body.dataset.view = v; }
+function show(v) { for (const n of ["login", "hub", "room", "settings", "playlists"]) $("#view-" + n).hidden = n !== v; document.body.dataset.view = v; }
 function renderChrome() {
   $("#topbar").hidden = !me;
   if (me) {
@@ -412,14 +466,42 @@ function renderChrome() {
   }
 }
 function route() {
-  leaveRoom(); if (hubUnsub) { hubUnsub(); hubUnsub = null; }
-  if (!me) return show("login");
+  if (hubUnsub) { hubUnsub(); hubUnsub = null; }
+  if (!me) { closeStage(); return show("login"); }
   const h = location.hash || "#/";
-  if (h.startsWith("#/room/")) openRoom(decodeURIComponent(h.slice(7)));
+  const targetRoomId = h.startsWith("#/room/") ? decodeURIComponent(h.slice(7)) : null;
+  if (room && targetRoomId && targetRoomId !== room.id) closeStage(); // ไปห้องอื่น ต้องปิดห้องเดิมก่อน
+  if (targetRoomId) { if (room && room.id === targetRoomId) show("room"); else openRoom(targetRoomId); }
   else if (h === "#/settings" && isAdmin()) openSettings();
+  else if (h === "#/playlists") openPlaylists();
   else openHub();
+  updateStageMode();
 }
 window.addEventListener("hashchange", route);
+
+/* ---------- วิดีโอย่อลอย (mini player) ---------- */
+function updateStageMode() {
+  const dock = $("#stageDock"), activeRoom = !!(room && room.joined);
+  dock.classList.toggle("active", activeRoom);
+  dock.classList.toggle("mini", activeRoom && document.body.dataset.view !== "room");
+  if (activeRoom) positionStageDock();
+}
+function positionStageDock() {
+  const dock = $("#stageDock");
+  if (dock.classList.contains("mini")) {
+    dock.style.top = ""; dock.style.left = ""; dock.style.right = "1rem"; dock.style.bottom = "1rem";
+    dock.style.width = "300px"; dock.style.height = (300 * 9 / 16) + "px";
+  } else {
+    const slot = $("#roomStageSlot"); if (!slot) return;
+    const b = slot.getBoundingClientRect();
+    dock.style.right = ""; dock.style.bottom = "";
+    dock.style.top = b.top + "px"; dock.style.left = b.left + "px"; dock.style.width = b.width + "px"; dock.style.height = b.height + "px";
+  }
+}
+window.addEventListener("resize", () => $("#stageDock").classList.contains("active") && positionStageDock());
+window.addEventListener("scroll", () => $("#stageDock").classList.contains("active") && positionStageDock(), { passive: true });
+$("#miniExpand").addEventListener("click", () => { location.hash = "#/room/" + encodeURIComponent(room.id); });
+$("#miniClose").addEventListener("click", () => closeStage());
 
 /* ---------- สถานะเชื่อมต่อ + ปุ่มรีเฟรช ---------- */
 onValue(ref(rdb, ".info/connected"), s => {
@@ -562,20 +644,22 @@ async function openRoom(id) {
   let c; try { c = await getDoc(doc(db, "cinemas", id)); } catch (ex) { toast(explain(ex), "err"); location.hash = "#/"; return; }
   if (!c.exists()) { toast("ไม่พบโรงหนังนี้"); location.hash = "#/"; return; }
   $("#roomTitle").textContent = c.data().name;
-  $("#joinOverlay").hidden = false; $("#emptyOverlay").hidden = true;
+  $("#joinOverlay").hidden = false; $("#joinBtn").hidden = false; $("#joinText").textContent = "กดปุ่มเพื่อเข้านั่งในโรง คลิปจะตรงกับเพื่อนทุกคน";
+  $("#emptyOverlay").hidden = true;
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
-  $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
+  $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#miniTitle").textContent = ""; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
   room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {} };
   const r = room;
   // ติดตามสถานะห้องและคิวตลอดเวลา ไม่ต้องรอกดเข้าร่วมก่อน (เพื่อให้เพิ่มคลิปเข้าคิวได้ทันที)
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/state`), s => onRemoteState(s.val())));
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/queue`), s => onQueueUpdate(s.val())));
+  populatePlaylistPicker();
 }
 $("#joinBtn").addEventListener("click", joinRoom);
 
 async function joinRoom() {
   const r = room; if (!r || r.joined) return; r.joined = true;
-  $("#joinOverlay").hidden = true;
+  $("#joinBtn").hidden = true; $("#joinText").innerHTML = '<span class="spinner"></span>กำลังโหลดคลิป...';
   await loadYT();
   if (room !== r) return;
   r.unsubs.push(onValue(ref(rdb, ".info/serverTimeOffset"), s => { r.offset = s.val() || 0; }));
@@ -589,6 +673,7 @@ async function joinRoom() {
     $("#seats").innerHTML = list.map(x => `<li><i style="background:${colorOf(x.name)}"></i>${esc(x.name)}</li>`).join("");
   }));
   createPlayer(r.state);
+  updateStageMode();
 }
 
 function serverNow() { return Date.now() + (room?.offset || 0); }
@@ -602,9 +687,9 @@ function createPlayer(st) {
     width: "100%", height: "100%", videoId: st?.videoId || undefined,
     playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
     events: {
-      onReady: () => { r.ready = true; if (r.state?.videoId) applyState(r.state); },
+      onReady: () => { r.ready = true; $("#joinOverlay").hidden = true; if (r.state?.videoId) applyState(r.state); },
       onStateChange: onPlayerState,
-      onError: e => toast([101, 150].includes(e.data) ? "คลิปนี้เจ้าของไม่อนุญาตให้ฝัง เลือกคลิปอื่น" : "เล่นคลิปนี้ไม่ได้ (รหัส " + e.data + ")", "err")
+      onError: e => { $("#joinOverlay").hidden = true; toast([101, 150].includes(e.data) ? "คลิปนี้เจ้าของไม่อนุญาตให้ฝัง เลือกคลิปอื่น" : "เล่นคลิปนี้ไม่ได้ (รหัส " + e.data + ")", "err"); }
     }
   });
   // ตรวจจับการเลื่อนเวลาเอง + ปรับเวลาให้ตรงเป็นระยะ
@@ -693,6 +778,7 @@ function nextOrder() { const r = room; return (r.queueItems.length ? Math.max(..
 function renderNowPlaying() {
   const r = room, st = r?.state, title = st?.videoId ? (r.titles[st.videoId] || st.videoId) : null;
   $("#nowPlaying").textContent = title ? (st.playing ? `▶ ${title}` : `⏸ ${title}`) : "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย";
+  $("#miniTitle").textContent = title || "";
 }
 function renderQueue() {
   const r = room, items = r.queueItems;
@@ -798,13 +884,14 @@ $("#fsBtn").addEventListener("click", () => {
   if (!room?.joined) return toast("กด \"เข้าร่วมดูพร้อมกัน\" ก่อน", "err");
   document.querySelector(".stage").requestFullscreen?.();
 });
-function leaveRoom() {
+function closeStage() {
   const r = room; if (!r) return; room = null;
   clearInterval(r.watch); clearInterval(r.sync); clearTimeout(r.applyTimer);
   r.unsubs.forEach(u => { try { u(); } catch { } });
   if (r.pref) { onDisconnect(r.pref).cancel().catch(() => { }); remove(r.pref).catch(() => { }); }
   try { r.player?.destroy(); } catch { }
   $("#playerHolder").innerHTML = "";
+  $("#stageDock").classList.remove("active", "mini");
 }
 
 /* ---------- ตั้งค่า ---------- */
@@ -971,6 +1058,113 @@ $("#logsClear").addEventListener("click", async () => {
     const b = writeBatch(db); snap.docs.forEach(d => b.delete(d.ref)); await b.commit();
     toast(`ลบแล้ว ${snap.size} รายการ`); loadLogs();
   } catch (ex) { toast(explain(ex), "err"); }
+});
+
+/* ---------- เพลย์ลิสต์ส่วนตัว ---------- */
+let plCache = [], plCurrent = null;
+async function openPlaylists() {
+  show("playlists");
+  $("#plDetailWrap").hidden = true; $("#plListWrap").hidden = false;
+  $("#plList").innerHTML = '<p class="muted">กำลังโหลด...</p>';
+  try {
+    const snap = await getDocs(query(collection(db, "playlists"), where("ownerUid", "==", me.uid)));
+    plCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderPlaylistList();
+  } catch (ex) { toast(explain(ex), "err"); }
+}
+function renderPlaylistList() {
+  $("#plList").innerHTML = plCache.length ? plCache.map(p => `
+    <div class="plCard" data-id="${esc(p.id)}"><div class="n"><b>${esc(p.name)}</b><span class="muted">${p.items.length} คลิป</span></div><span class="muted">เปิดดู →</span></div>`).join("")
+    : '<p class="muted">ยังไม่มีเพลย์ลิสต์ กด "+ สร้างเพลย์ลิสต์" เพื่อเริ่มเก็บคลิปโปรดของคุณ</p>';
+}
+$("#addPlaylistBtn").addEventListener("click", () => {
+  askDialog("สร้างเพลย์ลิสต์", `<label>ชื่อเพลย์ลิสต์</label><input name="name" maxlength="40" required>`, async f => {
+    const name = f.get("name").trim(); if (!name) throw new Error("กรอกชื่อเพลย์ลิสต์");
+    const ref2 = await addDoc(collection(db, "playlists"), { ownerUid: me.uid, name, items: [], createdAt: serverTimestamp() });
+    plCache.push({ id: ref2.id, ownerUid: me.uid, name, items: [] }); renderPlaylistList(); toast("สร้างเพลย์ลิสต์แล้ว");
+  });
+});
+$("#plList").addEventListener("click", e => {
+  const c = e.target.closest(".plCard"); if (!c) return;
+  plCurrent = plCache.find(p => p.id === c.dataset.id); if (!plCurrent) return;
+  $("#plListWrap").hidden = true; $("#plDetailWrap").hidden = false;
+  $("#plDetailName").textContent = plCurrent.name;
+  renderPlItems();
+});
+$("#plBackBtn").addEventListener("click", () => { plCurrent = null; $("#plDetailWrap").hidden = true; $("#plListWrap").hidden = false; });
+function renderPlItems() {
+  const items = plCurrent.items;
+  $("#plItems").innerHTML = items.length ? items.map((it, i) => `
+    <div class="plItem" data-i="${i}"><div class="info"><b>${esc(it.title || it.videoId)}</b></div>
+      <button class="btn danger small" data-act="pdel" type="button">ลบ</button></div>`).join("")
+    : '<p class="muted">ยังไม่มีคลิปในเพลย์ลิสต์นี้</p>';
+}
+$("#plAddForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const id = parseYouTubeId($("#plUrl").value); if (!id) return toast("ลิงก์ YouTube ไม่ถูกต้อง", "err");
+  $("#plUrl").value = "";
+  const btn = e.target.querySelector('button[type="submit"]'), orig = btn.textContent;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>กำลังตรวจสอบ...';
+  try {
+    const title = await fetchTitle(id);
+    const items = [...plCurrent.items, { videoId: id, title: title || id }];
+    await updateDoc(doc(db, "playlists", plCurrent.id), { items });
+    plCurrent.items = items; renderPlItems(); toast("เพิ่มคลิปแล้ว");
+  } catch (ex) { toast(explain(ex), "err"); }
+  finally { btn.disabled = false; btn.textContent = orig; }
+});
+$("#plItems").addEventListener("click", async e => {
+  const b = e.target.closest('[data-act="pdel"]'); if (!b) return;
+  const i = Number(b.closest(".plItem").dataset.i);
+  const items = plCurrent.items.filter((_, idx) => idx !== i);
+  try { await updateDoc(doc(db, "playlists", plCurrent.id), { items }); plCurrent.items = items; renderPlItems(); }
+  catch (ex) { toast(explain(ex), "err"); }
+});
+$("#plDeleteBtn").addEventListener("click", async () => {
+  const ok = await askConfirm("ลบเพลย์ลิสต์", `ลบ "${plCurrent.name}" ถาวร ?`, { okLabel: "ลบเพลย์ลิสต์" });
+  if (!ok) return;
+  try {
+    await deleteDoc(doc(db, "playlists", plCurrent.id));
+    plCache = plCache.filter(p => p.id !== plCurrent.id);
+    $("#plDetailWrap").hidden = true; $("#plListWrap").hidden = false; renderPlaylistList(); toast("ลบเพลย์ลิสต์แล้ว");
+  } catch (ex) { toast(explain(ex), "err"); }
+});
+
+/* เพิ่มจากเพลย์ลิสต์ส่วนตัว เข้าคิวในห้อง */
+async function populatePlaylistPicker() {
+  const wrap = $("#fromPlaylistRow"), sel = $("#pickPlaylist");
+  try {
+    const snap = await getDocs(query(collection(db, "playlists"), where("ownerUid", "==", me.uid)));
+    const lists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!lists.length) { wrap.hidden = true; return; }
+    sel.innerHTML = lists.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${p.items.length})</option>`).join("");
+    sel.dataset.cache = JSON.stringify(lists.map(p => ({ id: p.id, items: p.items })));
+    wrap.hidden = false;
+  } catch { wrap.hidden = true; }
+}
+$("#addFromPlaylistBtn").addEventListener("click", async () => {
+  const r = room; if (!r) return;
+  const lists = JSON.parse($("#pickPlaylist").dataset.cache || "[]");
+  const chosen = lists.find(p => p.id === $("#pickPlaylist").value);
+  if (!chosen || !chosen.items.length) return toast("เพลย์ลิสต์นี้ยังไม่มีคลิป", "err");
+  const btn = $("#addFromPlaylistBtn"), orig = btn.textContent;
+  btn.disabled = true; let added = 0, skipped = 0, ord = nextOrder();
+  for (const it of chosen.items) {
+    btn.innerHTML = `<span class="spinner"></span>กำลังเพิ่ม (${added + skipped + 1}/${chosen.items.length})`;
+    try {
+      const ok = await probeEmbeddable(it.videoId);
+      if (!ok) { skipped++; continue; }
+      if (!r.state?.videoId && !r.queueItems.length && added === 0) {
+        await set(ref(rdb, `rooms/${r.id}/state`), { videoId: it.videoId, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username });
+      } else {
+        const q = push(ref(rdb, `rooms/${r.id}/queue`));
+        await set(q, { videoId: it.videoId, title: it.title, addedBy: me.displayName || me.username, order: ord++ });
+      }
+      added++;
+    } catch { skipped++; }
+  }
+  btn.disabled = false; btn.textContent = orig;
+  toast(skipped ? `เพิ่มแล้ว ${added} คลิป (ข้าม ${skipped} คลิปที่ฝังไม่ได้)` : `เพิ่มแล้ว ${added} คลิป`);
 });
 
 loadSite();
