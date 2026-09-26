@@ -294,6 +294,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
         <div id="roomStageSlot"></div>
         <div class="playbar">
           <button class="btn" id="playPauseBtn" type="button" disabled>▶ เล่น</button>
+          <button class="btn ghost small" id="transferHostBtn" type="button" hidden>โอนหัวหน้าห้อง</button>
           <span class="muted" id="hostInfo"></span>
         </div>
         <div class="roomtools">
@@ -437,7 +438,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.10"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.11"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -707,7 +708,7 @@ async function openRoom(id) {
   $("#emptyOverlay").hidden = true;
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
   $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#miniTitle").textContent = ""; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
-  $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น";
+  $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น"; $("#transferHostBtn").hidden = true;
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
   room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null };
   const r = room;
@@ -736,11 +737,15 @@ async function joinRoom() {
   }));
   // หัวหน้าห้อง: บัญชีแรกที่เข้ามาในห้อง (ตอนห้องยังไม่มีใครถือสิทธิ์) จะได้สิทธิ์เล่น/หยุดคลิปแต่ผู้เดียว
   const hostRef = ref(rdb, `rooms/${r.id}/host`);
-  try {
-    const res = await runTransaction(hostRef, cur => cur === null || cur === undefined ? me.uid : cur);
-    if (res.committed && res.snapshot.val() === me.uid) { r.hostRef = hostRef; onDisconnect(hostRef).remove(); }
-  } catch { }
-  r.unsubs.push(onValue(hostRef, s => { r.hostUid = s.val(); updateHostUI(); renderSeats(); }));
+  try { await runTransaction(hostRef, cur => cur === null || cur === undefined ? me.uid : cur); } catch { }
+  // ติดสถานะหัวหน้าห้องแบบเรียลไทม์เสมอ: เป็นหัวหน้าอยู่ -> ตั้งค่าลบตัวเองตอนหลุดการเชื่อมต่อ
+  // ไม่ได้เป็นแล้ว (หลุดโหวต/โดนโอนสิทธิ์) -> ยกเลิกคำสั่งนั้นทันที กันไม่ให้ไปลบมงกุฎของหัวหน้าคนใหม่ตอนตัวเองหลุดทีหลัง
+  r.unsubs.push(onValue(hostRef, s => {
+    r.hostUid = s.val();
+    if (r.hostUid === me.uid) { r.hostRef = hostRef; onDisconnect(hostRef).remove(); }
+    else { onDisconnect(hostRef).cancel().catch(() => { }); r.hostRef = null; }
+    updateHostUI(); renderSeats();
+  }));
   // โหวตหัวหน้าห้องใหม่ (30 วินาที ใครได้คะแนนเยอะสุดเป็นหัวหน้า)
   r.unsubs.push(onValue(ref(rdb, `rooms/${r.id}/vote`), s => {
     const v = s.val();
@@ -844,9 +849,14 @@ function onPlayerState(e) {
   const r = room; if (!r || r.applying) return;
   const S = YT.PlayerState, playingNow = !!r.state?.playing;
   if ("mediaSession" in navigator) navigator.mediaSession.playbackState = e.data === S.PLAYING ? "playing" : e.data === S.PAUSED ? "paused" : navigator.mediaSession.playbackState;
+  if (e.data === S.ENDED && playingNow) { advanceQueue(r.state?.videoId); return; }
+  if (!r.isHost) {
+    // ไม่ใช่หัวหน้าห้อง ห้ามสั่งเล่น/หยุดเอง ถ้าหลุดไปหยุดเองไม่ว่าทางไหนให้ดึงกลับมาเล่นทันที
+    if (e.data === S.PAUSED && playingNow) r.player?.playVideo();
+    return;
+  }
   if (e.data === S.PLAYING && !playingNow) publish({ playing: true });
   else if (e.data === S.PAUSED && playingNow) publish({ playing: false });
-  else if (e.data === S.ENDED && playingNow) advanceQueue(r.state?.videoId);
 }
 function publish(patch) {
   const r = room, p = r?.player, cur = r?.state || {};
@@ -881,11 +891,22 @@ function updateHostUI() {
   r.isHost = !!(r.hostUid && me && r.hostUid === me.uid);
   const hostName = r.hostUid ? (r.presence?.[r.hostUid]?.name || (r.hostUid === me?.uid ? (me.displayName || me.username) : "กำลังโหลด...")) : null;
   $("#hostInfo").textContent = hostName ? (r.isHost ? "คุณเป็นหัวหน้าห้อง คุมเล่น/หยุดได้" : `หัวหน้าห้อง: ${hostName}`) : "ยังไม่มีหัวหน้าห้อง";
+  $("#transferHostBtn").hidden = !r.isHost;
   renderNowPlaying();
 }
 $("#playPauseBtn").addEventListener("click", () => {
   const r = room; if (!r?.isHost || !r.player) return;
   r.state?.playing ? r.player.pauseVideo() : r.player.playVideo();
+});
+$("#transferHostBtn").addEventListener("click", () => {
+  const r = room; if (!r?.isHost) return;
+  const others = Object.entries(r.presence || {}).filter(([uid]) => uid !== me.uid);
+  if (!others.length) return toast("ยังไม่มีคนอื่นในห้องให้โอนให้", "err");
+  askDialog("โอนหัวหน้าห้อง", `<label>เลือกคนที่จะโอนสิทธิ์ให้</label><select name="target">${others.map(([uid, x]) => `<option value="${esc(uid)}">${esc(x.name)}</option>`).join("")}</select>`,
+    async f => {
+      await set(ref(rdb, `rooms/${r.id}/host`), f.get("target"));
+      toast("โอนหัวหน้าห้องแล้ว");
+    });
 });
 
 /* ---------- โหวตหัวหน้าห้องใหม่ ---------- */
@@ -1059,7 +1080,7 @@ function closeStage() {
   try { r.player?.destroy(); } catch { }
   $("#playerHolder").innerHTML = "";
   $("#stageDock").classList.remove("active", "mini");
-  $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
+  $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true; $("#transferHostBtn").hidden = true;
   theaterMode = false; $("#view-room").classList.remove("theater"); $("#theaterBtn").textContent = "ขยายโรง";
 }
 
