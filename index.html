@@ -137,8 +137,13 @@ body[data-view="login"]::after{bottom:-16vw;right:-10vw;background:var(--accent2
 #view-room.theater .roomGrid{grid-template-columns:1fr}
 #view-room.theater .wrap{max-width:min(1600px,94vw)}
 #view-room.theater #roomStageSlot{width:min(100%,calc((100vh - 210px) * 16 / 9));margin-left:auto;margin-right:auto}
+.roomSide{display:flex;flex-direction:column;gap:1rem}
+.sideBox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem}
+.sideBox h3{margin-bottom:.6rem}
+.sideBox form,.sideBox>div{display:flex;flex-direction:column;gap:.5rem}
+.sideBox .btn{margin-top:.2rem}
 .roomSide{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1rem 1.1rem}
-.roomSide h3:first-child{margin-top:0}
+.sideBox h3{margin-top:0}
 
 /* เพลย์ลิสต์ส่วนตัว */
 .plCard{display:flex;align-items:center;gap:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.9rem 1.1rem;margin-bottom:.8rem;cursor:pointer}
@@ -300,17 +305,11 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
             <input type="range" id="volSlider" min="0" max="100" value="100" title="ระดับเสียง">
           </div>
         </div>
+        <div class="row" id="viewCtrlRow">
+          <button class="btn ghost" id="syncBtn" type="button">ซิงก์ฉัน</button>
+          <button class="btn ghost" id="fsBtn" type="button">เต็มจอ</button>
+        </div>
         <div class="roomtools">
-          <form class="row" id="videoForm">
-            <div><label for="vUrl">ลิงก์ YouTube</label><input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
-            <button class="btn" type="submit">เพิ่มเข้าคิว</button>
-            <button class="btn ghost" id="syncBtn" type="button">ซิงก์ฉัน</button>
-            <button class="btn ghost" id="fsBtn" type="button">เต็มจอ</button>
-          </form>
-          <div class="row" id="fromPlaylistRow" hidden>
-            <div><label for="pickPlaylist">เพิ่มจากเพลย์ลิสต์ของฉัน</label><select id="pickPlaylist"></select></div>
-            <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
-          </div>
           <p id="lastAction" class="muted"></p>
           <div class="row" id="voteRow">
             <button class="btn ghost" id="startVoteBtn" type="button">เปิดโหวตหัวหน้าห้อง</button>
@@ -321,10 +320,26 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
         </div>
       </div>
       <aside class="roomSide">
-        <h3>กำลังฉาย</h3>
-        <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
-        <h3>คิวถัดไป (<span id="queueCount">0</span>)</h3>
-        <ol class="queue" id="queueList"></ol>
+        <div class="sideBox">
+          <h3>เพิ่มคลิป</h3>
+          <form id="videoForm">
+            <label for="vUrl">ลิงก์ YouTube</label>
+            <input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+            <button class="btn" type="submit">เพิ่มเข้าคิว</button>
+          </form>
+          <div id="fromPlaylistRow" hidden>
+            <label for="pickPlaylist">เพิ่มจากเพลย์ลิสต์ของฉัน</label><select id="pickPlaylist"></select>
+            <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
+          </div>
+        </div>
+        <div class="sideBox">
+          <h3>กำลังฉาย</h3>
+          <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
+        </div>
+        <div class="sideBox">
+          <h3>คิวถัดไป (<span id="queueCount">0</span>)</h3>
+          <ol class="queue" id="queueList"></ol>
+        </div>
       </aside>
     </div>
   </div>
@@ -441,7 +456,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.13"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.14"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -896,7 +911,7 @@ function updateHostUI() {
   const hostName = r.hostUid ? (r.presence?.[r.hostUid]?.name || (r.hostUid === me?.uid ? (me.displayName || me.username) : "กำลังโหลด...")) : null;
   $("#hostInfo").textContent = hostName ? (r.isHost ? "คุณเป็นหัวหน้าห้อง คุมเล่น/หยุดได้" : `หัวหน้าห้อง: ${hostName}`) : "ยังไม่มีหัวหน้าห้อง";
   $("#transferHostBtn").hidden = !r.isHost;
-  renderNowPlaying();
+  renderNowPlaying(); renderQueue();
 }
 $("#playPauseBtn").addEventListener("click", () => {
   const r = room; if (!r?.isHost || !r.player) return;
@@ -997,7 +1012,7 @@ function renderQueue() {
       <div class="qacts">
         <button data-act="up" ${i === 0 ? "disabled" : ""} title="เลื่อนขึ้น" type="button">↑</button>
         <button data-act="down" ${i === items.length - 1 ? "disabled" : ""} title="เลื่อนลง" type="button">↓</button>
-        <button data-act="play" class="play" title="เล่นตอนนี้" type="button">▶</button>
+        <button data-act="play" class="play" title="${r.isHost ? "เล่นตอนนี้" : "เฉพาะหัวหน้าห้องเท่านั้น"}" type="button" ${r.isHost ? "" : "disabled"}>▶</button>
         <button data-act="del" class="del" title="ลบออกจากคิว" type="button">✕</button>
       </div>
     </li>`).join("") : '<li class="emptyq" style="border:0;background:none;padding:.2rem 0">ยังไม่มีคลิปในคิว</li>';
@@ -1011,7 +1026,7 @@ function onQueueUpdate(val) {
   } else if (it.title) r.titles[it.videoId] = it.title;
 }
 function playQueueItem(key, item) {
-  const r = room;
+  const r = room; if (!r?.isHost) return; // เฉพาะหัวหน้าห้องเท่านั้นที่สั่งเล่นได้
   set(ref(rdb, `rooms/${r.id}/state`), { videoId: item.videoId, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username })
     .then(() => remove(ref(rdb, `rooms/${r.id}/queue/${key}`)))
     .catch(ex => toast(explain(ex), "err"));
@@ -1056,7 +1071,7 @@ $("#videoForm").addEventListener("submit", async e => {
   try {
     const ok = await probeEmbeddable(id);
     if (!ok) { toast("คลิปนี้เจ้าของไม่อนุญาตให้ฝัง เลือกคลิปอื่น", "err"); return; }
-    if (!r.state?.videoId && !r.queueItems.length) {
+    if (r.isHost && !r.state?.videoId && !r.queueItems.length) {
       await set(ref(rdb, `rooms/${r.id}/state`), { videoId: id, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username });
       toast("เริ่มฉายเลย");
     } else {
@@ -1375,7 +1390,7 @@ $("#addFromPlaylistBtn").addEventListener("click", async () => {
     try {
       const ok = await probeEmbeddable(it.videoId);
       if (!ok) { skipped++; continue; }
-      if (!r.state?.videoId && !r.queueItems.length && added === 0) {
+      if (r.isHost && !r.state?.videoId && !r.queueItems.length && added === 0) {
         await set(ref(rdb, `rooms/${r.id}/state`), { videoId: it.videoId, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username });
       } else {
         const q = push(ref(rdb, `rooms/${r.id}/queue`));
