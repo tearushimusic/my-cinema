@@ -398,7 +398,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.6"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.6.1"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -481,10 +481,12 @@ window.addEventListener("hashchange", route);
 
 /* ---------- วิดีโอย่อลอย (mini player) ---------- */
 function updateStageMode() {
-  const dock = $("#stageDock"), activeRoom = !!(room && room.joined);
-  dock.classList.toggle("active", activeRoom);
-  dock.classList.toggle("mini", activeRoom && document.body.dataset.view !== "room");
-  if (activeRoom) positionStageDock();
+  const dock = $("#stageDock"), isRoomView = document.body.dataset.view === "room";
+  const showDocked = !!room && isRoomView; // อยู่หน้าโรงหนัง แสดงเต็มเสมอ ไม่ว่าจะกดเข้าร่วมหรือยัง
+  const showMini = !!(room && room.joined) && !isRoomView; // ย่อเฉพาะตอนมีคลิปเล่นอยู่จริงแล้วออกนอกหน้า
+  dock.classList.toggle("active", showDocked || showMini);
+  dock.classList.toggle("mini", showMini);
+  if (showDocked || showMini) positionStageDock();
 }
 function positionStageDock() {
   const dock = $("#stageDock");
@@ -654,6 +656,7 @@ async function openRoom(id) {
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/state`), s => onRemoteState(s.val())));
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/queue`), s => onQueueUpdate(s.val())));
   populatePlaylistPicker();
+  updateStageMode();
 }
 $("#joinBtn").addEventListener("click", joinRoom);
 
