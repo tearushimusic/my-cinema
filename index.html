@@ -331,6 +331,9 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
             <button class="btn ghost" id="startVoteBtn" type="button">เปิดโหวตหัวหน้าห้อง</button>
             <span class="muted" id="voteStatus" hidden></span>
           </div>
+          <div class="row" id="skipVoteRow">
+            <button class="btn ghost" id="openSkipVoteBtn" type="button">เปิดโหวตข้าม</button>
+          </div>
           <h3>ที่นั่ง (<span id="seatCount">0</span> คน)</h3>
           <ul class="seats" id="seats"></ul>
         </div>
@@ -459,6 +462,14 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
   <div id="infoBody" style="margin-top:.5rem"></div>
   <div class="actions"><button class="btn" type="button" id="infoClose">ปิด</button></div>
 </dialog>
+<dialog id="skipVoteDlg">
+  <h3>โหวตข้ามคลิปนี้?</h3>
+  <p class="muted" id="skipVoteStatus"></p>
+  <div class="actions" style="justify-content:center;gap:1rem">
+    <button class="btn ghost" id="skipNoBtn" type="button">ไม่เห็นด้วย</button>
+    <button class="btn danger solid" id="skipYesBtn" type="button">เห็นด้วย (ข้าม)</button>
+  </div>
+</dialog>
 <div id="toast" hidden><span class="ic"></span><span class="msgTxt"></span></div>
 
 <script type="module">
@@ -482,7 +493,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.21"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.22"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -796,7 +807,9 @@ async function openRoom(id) {
   $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น"; $("#transferHostBtn").hidden = true;
   $("#seekSlider").disabled = true; $("#seekSlider").value = 0; $("#curTime").textContent = "0:00"; $("#durTime").textContent = "0:00";
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
-  room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null, historyItems: [] };
+  $("#openSkipVoteBtn").hidden = false; $("#openSkipVoteBtn").disabled = true;
+  if ($("#skipVoteDlg").open) $("#skipVoteDlg").close();
+  room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null, historyItems: [], skipVote: null };
   const r = room;
   // ติดตามสถานะห้องและคิวตลอดเวลา ไม่ต้องรอกดเข้าร่วมก่อน (เพื่อให้เพิ่มคลิปเข้าคิวได้ทันที)
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/state`), s => onRemoteState(s.val())));
@@ -857,6 +870,13 @@ async function joinRoom() {
   }));
   // รีแอ็คชั่นอิโมจิลอย
   r.unsubs.push(onChildAdded(ref(rdb, `rooms/${r.id}/reactions`), s => spawnFloatEmoji(s.val()?.emoji)));
+  // โหวตข้ามคลิป (จำกัด 1 ครั้งต่อคลิป)
+  r.unsubs.push(onValue(ref(rdb, `rooms/${r.id}/skipVote`), s => {
+    r.skipVote = s.val() || null;
+    renderSkipVoteUI(); checkSkipThreshold();
+    if (r.skipVote?.active) { scheduleSkipTimer(); if (!r.skipTick) r.skipTick = setInterval(() => { if (!room?.skipVote?.active) { clearInterval(room?.skipTick); if (room) room.skipTick = null; return; } renderSkipVoteUI(); }, 500); }
+    else { clearSkipTimer(); if (r.skipTick) { clearInterval(r.skipTick); r.skipTick = null; } }
+  }));
   createPlayer(r.state);
   updateStageMode();
 }
@@ -991,6 +1011,7 @@ function renderNowPlaying() {
   btn.textContent = st?.playing ? "⏸ หยุด" : "▶ เล่น";
   btn.disabled = !r?.isHost || !st?.videoId;
   $("#seekSlider").disabled = !r?.isHost || !st?.videoId;
+  renderSkipVoteUI();
 }
 function updateHostUI() {
   const r = room; if (!r) return;
@@ -1131,6 +1152,62 @@ async function finishVote() {
     }
   } catch { }
 }
+
+/* ---------- โหวตข้ามคลิป (จำกัด 1 ครั้งต่อคลิปจนกว่าจะเปลี่ยนคลิปใหม่) ---------- */
+function renderSkipVoteUI() {
+  const r = room; if (!r) return;
+  const sv = r.skipVote, usedForThisClip = !!(sv?.videoId && sv.videoId === r.state?.videoId);
+  const btn = $("#openSkipVoteBtn");
+  btn.hidden = !!sv?.active;
+  btn.disabled = !r.state?.videoId || usedForThisClip;
+  btn.title = usedForThisClip ? "ใช้สิทธิ์โหวตข้ามคลิปนี้ไปแล้ว รอคลิปถัดไป" : "";
+  const dlg2 = $("#skipVoteDlg");
+  if (sv?.active) {
+    if (!dlg2.open) dlg2.showModal();
+    const total = Math.max(1, Object.keys(r.presence || {}).length);
+    const votes = Object.values(sv.votes || {});
+    const yes = votes.filter(v => v === "yes").length, no = votes.filter(v => v === "no").length;
+    const secs = Math.max(0, Math.ceil(((sv.endsAt || 0) - serverNow()) / 1000));
+    $("#skipVoteStatus").textContent = `เห็นด้วย ${yes} · ไม่เห็นด้วย ${no} จาก ${total} คน · เหลือ ${secs} วิ`;
+    const myVote = sv.votes?.[me.uid];
+    $("#skipYesBtn").disabled = myVote === "yes"; $("#skipNoBtn").disabled = myVote === "no";
+  } else if (dlg2.open) dlg2.close();
+}
+function checkSkipThreshold() {
+  const r = room; if (!r?.skipVote?.active) return;
+  const total = Math.max(1, Object.keys(r.presence || {}).length);
+  const votes = Object.values(r.skipVote.votes || {});
+  const yes = votes.filter(v => v === "yes").length, no = votes.filter(v => v === "no").length;
+  if (yes / total >= 0.5) resolveSkipVote(true);
+  else if (no / total >= 0.5) resolveSkipVote(false);
+}
+async function resolveSkipVote(doSkip) {
+  const r = room; if (!r) return;
+  try {
+    const res = await runTransaction(ref(rdb, `rooms/${r.id}/skipVote`), cur => (!cur || !cur.active) ? cur : { ...cur, active: false });
+    if (res.committed && res.snapshot.val()?.active === false) {
+      if (doSkip) { toast("โหวตผ่าน ข้ามคลิปนี้แล้ว"); advanceQueue(res.snapshot.val().videoId); }
+      else toast("โหวตไม่ผ่าน ดูคลิปนี้ต่อ");
+    }
+  } catch { }
+}
+function scheduleSkipTimer() {
+  const r = room; if (!r || r.skipTimer) return;
+  const msLeft = Math.max(500, (r.skipVote?.endsAt || 0) - serverNow());
+  r.skipTimer = setTimeout(() => { if (room) room.skipTimer = null; if (room?.skipVote?.active) resolveSkipVote(false); }, msLeft);
+}
+function clearSkipTimer() { const r = room; if (r?.skipTimer) { clearTimeout(r.skipTimer); r.skipTimer = null; } }
+$("#openSkipVoteBtn").addEventListener("click", async () => {
+  const r = room; if (!r?.state?.videoId) return;
+  try { await set(ref(rdb, `rooms/${r.id}/skipVote`), { active: true, videoId: r.state.videoId, endsAt: serverNow() + 30000, votes: {} }); }
+  catch (ex) { toast(explain(ex), "err"); }
+});
+function castSkipVote(v) {
+  const r = room; if (!r?.skipVote?.active) return;
+  set(ref(rdb, `rooms/${r.id}/skipVote/votes/${me.uid}`), v).catch(ex => toast(explain(ex), "err"));
+}
+$("#skipYesBtn").addEventListener("click", () => castSkipVote("yes"));
+$("#skipNoBtn").addEventListener("click", () => castSkipVote("no"));
 function renderQueue() {
   const r = room, items = r.queueItems;
   $("#queueCount").textContent = items.length;
@@ -1308,12 +1385,14 @@ function closeStage() {
   const r = room; if (!r) return; room = null;
   clearInterval(r.watch); clearInterval(r.sync); clearInterval(r.seekWatch); clearTimeout(r.applyTimer);
   clearTimeout(r.voteTimer); clearInterval(r.voteTick);
+  clearTimeout(r.skipTimer); clearInterval(r.skipTick);
   r.unsubs.forEach(u => { try { u(); } catch { } });
   if (r.pref) { onDisconnect(r.pref).cancel().catch(() => { }); remove(r.pref).catch(() => { }); }
   if (r.hostRef) { onDisconnect(r.hostRef).cancel().catch(() => { }); remove(r.hostRef).catch(() => { }); }
   try { r.player?.destroy(); } catch { }
   $("#playerHolder").innerHTML = "";
   $("#stageDock").classList.remove("active", "mini");
+  if ($("#skipVoteDlg").open) $("#skipVoteDlg").close();
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true; $("#transferHostBtn").hidden = true;
 }
 
