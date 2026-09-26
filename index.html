@@ -113,20 +113,26 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1);animation:curtainR .
 .row>.btn{flex:0 0 auto}
 
 /* โรงหนัง */
-#stageDock{position:fixed;z-index:40;display:none;transition:top .3s cubic-bezier(.2,.8,.2,1),left .3s cubic-bezier(.2,.8,.2,1),width .3s cubic-bezier(.2,.8,.2,1),height .3s cubic-bezier(.2,.8,.2,1),border-radius .3s ease,box-shadow .3s ease}
-#stageDock.active{display:block}
-#stageDock.mini{border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
-.stage{position:relative;width:100%;height:100%;background:#000;border:2px solid var(--brass2);border-radius:inherit;box-shadow:0 0 0 6px var(--bg2);overflow:hidden}
-#stageDock:not(.mini) .stage{box-shadow:0 0 0 6px var(--bg2),0 24px 60px rgba(0,0,0,.55)}
+#stageDock{width:100%;animation:viewFade .2s ease}
+#miniDock{position:fixed;right:1rem;bottom:1rem;width:min(300px,42vw);z-index:60;display:none}
+#miniDock.active{display:block}
+.stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border:2px solid var(--brass2);border-radius:6px;box-shadow:0 0 0 6px var(--bg2),0 24px 60px rgba(0,0,0,.55);overflow:hidden}
+#miniDock .stage{border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
 .stage #playerHolder,.stage #playerHolder iframe{position:absolute;inset:0;width:100%;height:100%}
 .overlay{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:1rem;background:rgba(42,13,22,.92);z-index:2}
 .miniBar{display:none;position:absolute;top:0;left:0;right:0;z-index:3;background:rgba(0,0,0,.6);color:#fff;align-items:center;gap:.3rem;padding:.25rem .4rem}
-#stageDock.mini .miniBar{display:flex}
+#miniDock .miniBar{display:flex}
 .miniBar span{flex:1;font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .miniBar button{background:transparent;border:0;color:#fff;cursor:pointer;font-size:.95rem;padding:.15rem .35rem;line-height:1}
 .miniBar button:hover{background:rgba(255,255,255,.15);border-radius:4px}
-#stageDock.mini #joinOverlay,#stageDock.mini #emptyOverlay{display:none}
-#roomStageSlot{aspect-ratio:16/9;margin-bottom:1.4rem}
+#miniDock #joinOverlay,#miniDock #emptyOverlay{display:none}
+#roomStageSlot{margin-bottom:1.4rem}
+
+/* จัดวางฝั่งขวา: กำลังฉาย + คิว */
+.roomGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
+@media (min-width:900px){.roomGrid{grid-template-columns:1fr 340px;align-items:start}}
+.roomSide{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1rem 1.1rem}
+.roomSide h3:first-child{margin-top:0}
 
 /* เพลย์ลิสต์ส่วนตัว */
 .plCard{display:flex;align-items:center;gap:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.9rem 1.1rem;margin-bottom:.8rem;cursor:pointer}
@@ -233,6 +239,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
     </div>
   </div>
 </div>
+<div id="miniDock"></div>
 
 <!-- ล็อกอิน -->
 <section id="view-login">
@@ -269,25 +276,31 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <section id="view-room" hidden>
   <div class="wrap">
     <div class="head"><h2 id="roomTitle"></h2><span class="muted">ทุกคนในโรงควบคุมคลิปได้</span></div>
-    <div id="roomStageSlot"></div>
-    <div class="roomtools">
-      <form class="row" id="videoForm">
-        <div><label for="vUrl">ลิงก์ YouTube</label><input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
-        <button class="btn" type="submit">เพิ่มเข้าคิว</button>
-        <button class="btn ghost" id="syncBtn" type="button">ซิงก์ฉัน</button>
-        <button class="btn ghost" id="fsBtn" type="button">เต็มจอ</button>
-      </form>
-      <div class="row" id="fromPlaylistRow" hidden>
-        <div><label for="pickPlaylist">เพิ่มจากเพลย์ลิสต์ของฉัน</label><select id="pickPlaylist"></select></div>
-        <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
+    <div class="roomGrid">
+      <div class="roomMain">
+        <div id="roomStageSlot"></div>
+        <div class="roomtools">
+          <form class="row" id="videoForm">
+            <div><label for="vUrl">ลิงก์ YouTube</label><input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
+            <button class="btn" type="submit">เพิ่มเข้าคิว</button>
+            <button class="btn ghost" id="syncBtn" type="button">ซิงก์ฉัน</button>
+            <button class="btn ghost" id="fsBtn" type="button">เต็มจอ</button>
+          </form>
+          <div class="row" id="fromPlaylistRow" hidden>
+            <div><label for="pickPlaylist">เพิ่มจากเพลย์ลิสต์ของฉัน</label><select id="pickPlaylist"></select></div>
+            <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
+          </div>
+          <p id="lastAction" class="muted"></p>
+          <h3>ที่นั่ง (<span id="seatCount">0</span> คน)</h3>
+          <ul class="seats" id="seats"></ul>
+        </div>
       </div>
-      <p id="lastAction" class="muted"></p>
-      <h3>กำลังฉาย</h3>
-      <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
-      <h3>คิวถัดไป (<span id="queueCount">0</span>)</h3>
-      <ol class="queue" id="queueList"></ol>
-      <h3>ที่นั่ง (<span id="seatCount">0</span> คน)</h3>
-      <ul class="seats" id="seats"></ul>
+      <aside class="roomSide">
+        <h3>กำลังฉาย</h3>
+        <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
+        <h3>คิวถัดไป (<span id="queueCount">0</span>)</h3>
+        <ol class="queue" id="queueList"></ol>
+      </aside>
     </div>
   </div>
 </section>
@@ -398,7 +411,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.6.1"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.7"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -480,28 +493,15 @@ function route() {
 window.addEventListener("hashchange", route);
 
 /* ---------- วิดีโอย่อลอย (mini player) ---------- */
+// ย้าย DOM ของกล่องวิดีโอไปมาระหว่าง "ในหน้าโรงหนัง" กับ "กล่องลอยมุมจอ" แทนการคำนวณตำแหน่งด้วย JS
+// เพื่อให้ตอนดูอยู่ในหน้าโรงหนังมันอยู่นิ่งกับที่จริงๆ ไม่ขยับตอนเลื่อนจอ
 function updateStageMode() {
-  const dock = $("#stageDock"), isRoomView = document.body.dataset.view === "room";
-  const showDocked = !!room && isRoomView; // อยู่หน้าโรงหนัง แสดงเต็มเสมอ ไม่ว่าจะกดเข้าร่วมหรือยัง
-  const showMini = !!(room && room.joined) && !isRoomView; // ย่อเฉพาะตอนมีคลิปเล่นอยู่จริงแล้วออกนอกหน้า
-  dock.classList.toggle("active", showDocked || showMini);
-  dock.classList.toggle("mini", showMini);
-  if (showDocked || showMini) positionStageDock();
+  const stage = $("#stageDock"), mini = $("#miniDock"), isRoomView = document.body.dataset.view === "room";
+  if (!room) { mini.classList.remove("active"); return; }
+  if (isRoomView) { $("#roomStageSlot").appendChild(stage); mini.classList.remove("active"); }
+  else if (room.joined) { mini.appendChild(stage); mini.classList.add("active"); }
+  else { mini.classList.remove("active"); }
 }
-function positionStageDock() {
-  const dock = $("#stageDock");
-  if (dock.classList.contains("mini")) {
-    dock.style.top = ""; dock.style.left = ""; dock.style.right = "1rem"; dock.style.bottom = "1rem";
-    dock.style.width = "300px"; dock.style.height = (300 * 9 / 16) + "px";
-  } else {
-    const slot = $("#roomStageSlot"); if (!slot) return;
-    const b = slot.getBoundingClientRect();
-    dock.style.right = ""; dock.style.bottom = "";
-    dock.style.top = b.top + "px"; dock.style.left = b.left + "px"; dock.style.width = b.width + "px"; dock.style.height = b.height + "px";
-  }
-}
-window.addEventListener("resize", () => $("#stageDock").classList.contains("active") && positionStageDock());
-window.addEventListener("scroll", () => $("#stageDock").classList.contains("active") && positionStageDock(), { passive: true });
 $("#miniExpand").addEventListener("click", () => { location.hash = "#/room/" + encodeURIComponent(room.id); });
 $("#miniClose").addEventListener("click", () => closeStage());
 
@@ -695,14 +695,13 @@ function createPlayer(st) {
       onError: e => { $("#joinOverlay").hidden = true; toast([101, 150].includes(e.data) ? "คลิปนี้เจ้าของไม่อนุญาตให้ฝัง เลือกคลิปอื่น" : "เล่นคลิปนี้ไม่ได้ (รหัส " + e.data + ")", "err"); }
     }
   });
-  // ตรวจจับการเลื่อนเวลาเอง + ปรับเวลาให้ตรงเป็นระยะ
+  // ตรวจจับการเลื่อนเวลาเอง + ปรับเวลาให้ตรงเป็นระยะ (เฉพาะตอนกำลังเล่นอยู่จริงเท่านั้น กันไม่ให้ไปเผลอสั่งเล่นซ้ำตอนหยุดอยู่)
   r.watch = setInterval(() => {
-    const p = r.player; if (!r.ready || !p?.getCurrentTime) return;
+    const p = r.player; if (!r.ready || !p?.getCurrentTime || !r.state?.playing) return;
     const S = YT.PlayerState, ps = p.getPlayerState(), cur = p.getCurrentTime(), now = Date.now();
-    if (r.pos && !r.applying && ps !== S.BUFFERING && ps !== S.UNSTARTED) {
-      const playing = ps === S.PLAYING;
-      const expected = r.pos.t + (playing ? (now - r.pos.at) / 1000 * p.getPlaybackRate() : 0);
-      if (Math.abs(cur - expected) > 1.5 && r.state?.videoId) publish({ time: cur });
+    if (r.pos && !r.applying && ps === S.PLAYING) {
+      const expected = r.pos.t + (now - r.pos.at) / 1000 * p.getPlaybackRate();
+      if (Math.abs(cur - expected) > 1.5) publish({ time: cur, playing: true });
     }
     r.pos = { t: cur, at: now };
   }, 500);
@@ -894,7 +893,7 @@ function closeStage() {
   if (r.pref) { onDisconnect(r.pref).cancel().catch(() => { }); remove(r.pref).catch(() => { }); }
   try { r.player?.destroy(); } catch { }
   $("#playerHolder").innerHTML = "";
-  $("#stageDock").classList.remove("active", "mini");
+  $("#miniDock").classList.remove("active");
 }
 
 /* ---------- ตั้งค่า ---------- */
