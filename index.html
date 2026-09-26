@@ -128,14 +128,15 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1);animation:curtainR .
 .miniBar button:hover{background:rgba(255,255,255,.15);border-radius:4px}
 #stageDock.mini #joinOverlay,#stageDock.mini #emptyOverlay{display:none}
 #roomStageSlot{aspect-ratio:16/9;margin-bottom:1.4rem}
-#roomStageSlot.fullbleed{width:calc(100vw - 6vw);position:relative;left:50%;margin-left:calc(-50vw + 3vw)}
 .playbar{display:flex;align-items:center;gap:.8rem;margin:.9rem 0}
 .playbar .btn:disabled{opacity:.4;cursor:not-allowed}
 
 /* จัดวางฝั่งขวา: กำลังฉาย + คิว */
 .roomGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
 @media (min-width:900px){.roomGrid{grid-template-columns:1fr 340px;align-items:start}}
-.roomGrid.theater{grid-template-columns:1fr}
+#view-room.theater .roomGrid{grid-template-columns:1fr}
+#view-room.theater .wrap{max-width:min(1600px,94vw)}
+#view-room.theater #roomStageSlot{width:min(100%,calc((100vh - 210px) * 16 / 9));margin-left:auto;margin-right:auto}
 .roomSide{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1rem 1.1rem}
 .roomSide h3:first-child{margin-top:0}
 
@@ -152,6 +153,9 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1);animation:curtainR .
 .seats{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.5rem}
 .seats li{display:flex;align-items:center;gap:.45rem;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:.2rem .8rem .2rem .5rem;font-size:.92rem}
 .seats i{width:.8rem;height:.8rem;border-radius:50%}
+.seats .voteBtn{background:transparent;border:1px solid var(--brass2);color:var(--brass);border-radius:999px;padding:.05rem .55rem;font-size:.78rem;cursor:pointer}
+.seats .voteBtn:hover{background:var(--panel2)}
+.seats .voteCount{font-size:.78rem;color:var(--mute)}
 #lastAction{min-height:1.5em;font-size:.92rem}
 .queue{list-style:none;margin:.4rem 0 0;padding:0;display:grid;gap:.5rem}
 .queue li{display:flex;flex-direction:column;gap:.4rem;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem}
@@ -283,7 +287,8 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <section id="view-room" hidden>
   <div class="wrap">
     <div class="head"><h2 id="roomTitle"></h2><span class="muted">ทุกคนเพิ่ม/จัดคิวได้ · เล่น-หยุดคุมโดยหัวหน้าห้อง</span>
-      <button class="btn ghost small" id="theaterBtn" type="button">ขยายโรง</button></div>
+      <button class="btn ghost small" id="theaterBtn" type="button">ขยายโรง</button>
+      <button class="btn danger small" id="leaveRoomBtn" type="button">ออกจากห้อง</button></div>
     <div class="roomGrid" id="roomGrid">
       <div class="roomMain">
         <div id="roomStageSlot"></div>
@@ -303,6 +308,10 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
             <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
           </div>
           <p id="lastAction" class="muted"></p>
+          <div class="row" id="voteRow">
+            <button class="btn ghost" id="startVoteBtn" type="button">เปิดโหวตหัวหน้าห้อง</button>
+            <span class="muted" id="voteStatus" hidden></span>
+          </div>
           <h3>ที่นั่ง (<span id="seatCount">0</span> คน)</h3>
           <ul class="seats" id="seats"></ul>
         </div>
@@ -428,7 +437,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.9"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.10"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -547,11 +556,11 @@ $("#miniExpand").addEventListener("click", () => { location.hash = "#/room/" + e
 $("#miniClose").addEventListener("click", () => closeStage());
 $("#theaterBtn").addEventListener("click", () => {
   theaterMode = !theaterMode;
-  $("#roomGrid").classList.toggle("theater", theaterMode);
-  $("#roomStageSlot").classList.toggle("fullbleed", theaterMode);
+  $("#view-room").classList.toggle("theater", theaterMode);
   $("#theaterBtn").textContent = theaterMode ? "ย่อโรง" : "ขยายโรง";
   scheduleReposition();
 });
+$("#leaveRoomBtn").addEventListener("click", () => { closeStage(); location.hash = "#/"; });
 
 /* ---------- สถานะเชื่อมต่อ + ปุ่มรีเฟรช ---------- */
 onValue(ref(rdb, ".info/connected"), s => {
@@ -699,7 +708,8 @@ async function openRoom(id) {
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
   $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#miniTitle").textContent = ""; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
   $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น";
-  room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false };
+  $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
+  room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null };
   const r = room;
   // ติดตามสถานะห้องและคิวตลอดเวลา ไม่ต้องรอกดเข้าร่วมก่อน (เพื่อให้เพิ่มคลิปเข้าคิวได้ทันที)
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/state`), s => onRemoteState(s.val())));
@@ -721,10 +731,8 @@ async function joinRoom() {
   }));
   r.unsubs.push(onValue(ref(rdb, `rooms/${r.id}/presence`), s => {
     r.presence = s.val() || {};
-    const list = Object.values(r.presence);
-    $("#seatCount").textContent = list.length;
-    $("#seats").innerHTML = list.map(x => `<li><i style="background:${colorOf(x.name)}"></i>${esc(x.name)}</li>`).join("");
-    updateHostUI();
+    $("#seatCount").textContent = Object.keys(r.presence).length;
+    renderSeats();
   }));
   // หัวหน้าห้อง: บัญชีแรกที่เข้ามาในห้อง (ตอนห้องยังไม่มีใครถือสิทธิ์) จะได้สิทธิ์เล่น/หยุดคลิปแต่ผู้เดียว
   const hostRef = ref(rdb, `rooms/${r.id}/host`);
@@ -732,7 +740,24 @@ async function joinRoom() {
     const res = await runTransaction(hostRef, cur => cur === null || cur === undefined ? me.uid : cur);
     if (res.committed && res.snapshot.val() === me.uid) { r.hostRef = hostRef; onDisconnect(hostRef).remove(); }
   } catch { }
-  r.unsubs.push(onValue(hostRef, s => { r.hostUid = s.val(); updateHostUI(); }));
+  r.unsubs.push(onValue(hostRef, s => { r.hostUid = s.val(); updateHostUI(); renderSeats(); }));
+  // โหวตหัวหน้าห้องใหม่ (30 วินาที ใครได้คะแนนเยอะสุดเป็นหัวหน้า)
+  r.unsubs.push(onValue(ref(rdb, `rooms/${r.id}/vote`), s => {
+    const v = s.val();
+    r.voteActive = !!v?.active; r.voteVotes = v?.votes || {}; r.voteEndsAt = v?.endsAt || null;
+    updateVoteUI(); renderSeats();
+    if (r.voteActive) {
+      scheduleVoteTimer();
+      if (!r.voteTick) r.voteTick = setInterval(() => {
+        if (!room || !room.voteActive) { clearInterval(room?.voteTick); if (room) room.voteTick = null; return; }
+        const secs = Math.max(0, Math.ceil((room.voteEndsAt - serverNow()) / 1000));
+        $("#voteStatus").textContent = `กำลังโหวต... เหลือ ${secs} วิ (กด "โหวต" ข้างชื่อในที่นั่ง)`;
+      }, 500);
+    } else {
+      clearVoteTimer();
+      if (r.voteTick) { clearInterval(r.voteTick); r.voteTick = null; }
+    }
+  }));
   createPlayer(r.state);
   updateStageMode();
 }
@@ -862,6 +887,52 @@ $("#playPauseBtn").addEventListener("click", () => {
   const r = room; if (!r?.isHost || !r.player) return;
   r.state?.playing ? r.player.pauseVideo() : r.player.playVideo();
 });
+
+/* ---------- โหวตหัวหน้าห้องใหม่ ---------- */
+function renderSeats() {
+  const r = room; if (!r) return;
+  const entries = Object.entries(r.presence || {});
+  const tally = {};
+  if (r.voteActive) Object.values(r.voteVotes || {}).forEach(uid => tally[uid] = (tally[uid] || 0) + 1);
+  $("#seats").innerHTML = entries.length ? entries.map(([uid, x]) => `
+    <li><i style="background:${colorOf(x.name)}"></i>${uid === r.hostUid ? "👑 " : ""}${esc(x.name)}
+      ${r.voteActive ? `<span class="voteCount">${tally[uid] || 0}</span><button class="voteBtn" data-vote-uid="${esc(uid)}" type="button">โหวต</button>` : ""}</li>`).join("")
+    : "";
+}
+$("#seats").addEventListener("click", e => {
+  const b = e.target.closest("[data-vote-uid]"); if (!b || !room?.voteActive) return;
+  set(ref(rdb, `rooms/${room.id}/vote/votes/${me.uid}`), b.dataset.voteUid).catch(ex => toast(explain(ex), "err"));
+  toast("โหวตแล้ว");
+});
+function updateVoteUI() {
+  const r = room; if (!r) return;
+  $("#startVoteBtn").hidden = !!r.voteActive;
+  $("#voteStatus").hidden = !r.voteActive;
+}
+$("#startVoteBtn").addEventListener("click", async () => {
+  const r = room; if (!r || r.voteActive) return;
+  try { await set(ref(rdb, `rooms/${r.id}/vote`), { active: true, endsAt: serverNow() + 30000, votes: {} }); }
+  catch (ex) { toast(explain(ex), "err"); }
+});
+function scheduleVoteTimer() {
+  const r = room; if (!r || r.voteTimer) return;
+  const msLeft = Math.max(500, (r.voteEndsAt || 0) - serverNow());
+  r.voteTimer = setTimeout(() => { if (room) room.voteTimer = null; finishVote(); }, msLeft);
+}
+function clearVoteTimer() { const r = room; if (r?.voteTimer) { clearTimeout(r.voteTimer); r.voteTimer = null; } }
+async function finishVote() {
+  const r = room; if (!r) return;
+  const tally = {};
+  Object.values(r.voteVotes || {}).forEach(uid => tally[uid] = (tally[uid] || 0) + 1);
+  let winner = null, max = 0;
+  for (const [uid, count] of Object.entries(tally)) if (count > max) { max = count; winner = uid; }
+  try {
+    const res = await runTransaction(ref(rdb, `rooms/${r.id}/vote`), cur => (!cur || !cur.active) ? cur : { active: false, endsAt: null, votes: null });
+    if (res.committed && res.snapshot.val()?.active === false && winner) {
+      await set(ref(rdb, `rooms/${r.id}/host`), winner);
+    }
+  } catch { }
+}
 function renderQueue() {
   const r = room, items = r.queueItems;
   $("#queueCount").textContent = items.length;
@@ -981,13 +1052,15 @@ $("#fsBtn").addEventListener("click", () => {
 function closeStage() {
   const r = room; if (!r) return; room = null;
   clearInterval(r.watch); clearInterval(r.sync); clearTimeout(r.applyTimer);
+  clearTimeout(r.voteTimer); clearInterval(r.voteTick);
   r.unsubs.forEach(u => { try { u(); } catch { } });
   if (r.pref) { onDisconnect(r.pref).cancel().catch(() => { }); remove(r.pref).catch(() => { }); }
   if (r.hostRef) { onDisconnect(r.hostRef).cancel().catch(() => { }); remove(r.hostRef).catch(() => { }); }
   try { r.player?.destroy(); } catch { }
   $("#playerHolder").innerHTML = "";
   $("#stageDock").classList.remove("active", "mini");
-  theaterMode = false; $("#roomGrid").classList.remove("theater"); $("#roomStageSlot").classList.remove("fullbleed"); $("#theaterBtn").textContent = "ขยายโรง";
+  $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
+  theaterMode = false; $("#view-room").classList.remove("theater"); $("#theaterBtn").textContent = "ขยายโรง";
 }
 
 /* ---------- ตั้งค่า ---------- */
