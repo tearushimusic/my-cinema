@@ -127,6 +127,10 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .volCtrl button:hover{background:var(--panel)}
 .volCtrl input[type=range]{width:110px;accent-color:var(--accent)}
 .volCtrl input[type=number]{width:3.2rem;padding:.3rem .35rem;text-align:right;flex:0 0 auto}
+.seekbar{display:flex;align-items:center;gap:.6rem;margin-top:.6rem}
+.seekbar span{font-size:.82rem;flex:0 0 auto;font-variant-numeric:tabular-nums}
+.seekbar input[type=range]{flex:1 1 auto;accent-color:var(--accent)}
+.seekbar input[type=range]:disabled{opacity:.6;cursor:default}
 
 /* จัดวางฝั่งขวา: กำลังฉาย + คิว */
 .roomGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
@@ -293,6 +297,11 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
     <div class="roomGrid" id="roomGrid">
       <div class="roomMain">
         <div id="roomStageSlot"></div>
+        <div class="seekbar">
+          <span class="muted" id="curTime">0:00</span>
+          <input type="range" id="seekSlider" min="0" max="100" value="0" step="0.1" disabled title="ลากเพื่อเลื่อนเวลา (เฉพาะหัวหน้าห้อง)">
+          <span class="muted" id="durTime">0:00</span>
+        </div>
         <div class="playbar">
           <button class="btn ghost small" id="fsBtn" type="button">เต็มจอ</button>
           <button class="btn" id="playPauseBtn" type="button" disabled>▶ เล่น</button>
@@ -332,7 +341,10 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
               <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
             </div>
           </div>
-          <ol class="queue" id="historyList" hidden></ol>
+          <div id="historyPane" hidden>
+            <input type="search" id="historySearch" placeholder="ค้นหาในประวัติ...">
+            <ol class="queue" id="historyList"></ol>
+          </div>
         </div>
         <div class="sideBox">
           <h3>กำลังฉาย</h3>
@@ -458,7 +470,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.18"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.19"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -544,7 +556,20 @@ window.addEventListener("hashchange", route);
 /* ---------- วิดีโอย่อลอย (mini player) ---------- */
 // ไม่ย้าย DOM ของกล่องวิดีโอเด็ดขาด (กันคลิปหลุด/รีโหลดตอนสลับหน้า) ใช้ position:fixed
 // แล้วคำนวณตำแหน่งด้วย requestAnimationFrame แทน เพื่อไม่ให้มีดีเลย์จนดูสั่นตอนเลื่อนจอ
-let stageRAF = null;
+let stageRAF = null, historyExpanded = false, historyQuery = "", seekDragging = false;
+function fmtTime(s) { s = Math.max(0, Math.floor(s || 0)); const m = Math.floor(s / 60), sec = s % 60; return `${m}:${String(sec).padStart(2, "0")}`; }
+$("#seekSlider").addEventListener("mousedown", () => { seekDragging = true; });
+$("#seekSlider").addEventListener("touchstart", () => { seekDragging = true; });
+$("#seekSlider").addEventListener("input", e => { if (room?.isHost) $("#curTime").textContent = fmtTime(Number(e.target.value)); });
+$("#seekSlider").addEventListener("change", e => {
+  seekDragging = false;
+  const r = room; if (!r?.isHost || !r.player) return;
+  const t = Number(e.target.value);
+  r.player.seekTo(t, true);
+  publish({ time: t, playing: r.state?.playing ?? true });
+});
+window.addEventListener("mouseup", () => seekDragging = false);
+window.addEventListener("touchend", () => seekDragging = false);
 function updateStageMode() {
   const dock = $("#stageDock"), isRoomView = document.body.dataset.view === "room";
   const showDocked = !!room && isRoomView; // อยู่หน้าโรงหนัง แสดงเต็มเสมอ ไม่ว่าจะกดเข้าร่วมหรือยัง
@@ -722,9 +747,11 @@ async function openRoom(id) {
   $("#emptyOverlay").hidden = true;
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
   $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#miniTitle").textContent = ""; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
-  $("#historyList").innerHTML = ""; $("#historyList").hidden = true; $("#addPane").hidden = false;
+  $("#historyList").innerHTML = ""; $("#historyPane").hidden = true; $("#addPane").hidden = false; $("#historySearch").value = "";
+  historyExpanded = false; historyQuery = "";
   $("#addTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.atab === "add" ? "true" : "false"));
   $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น"; $("#transferHostBtn").hidden = true;
+  $("#seekSlider").disabled = true; $("#seekSlider").value = 0; $("#curTime").textContent = "0:00"; $("#durTime").textContent = "0:00";
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
   room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null, historyItems: [] };
   const r = room;
@@ -824,6 +851,12 @@ function createPlayer(st) {
     r.pos = { t: cur, at: now };
   }, 500);
   r.sync = setInterval(() => { if (r.ready && r.state?.playing) softSync(); }, 5000);
+  r.seekWatch = setInterval(() => {
+    const p = r.player; if (!r.ready || !p?.getDuration || seekDragging) return;
+    const dur = p.getDuration() || 0, cur = p.getCurrentTime() || 0;
+    $("#seekSlider").max = dur; $("#seekSlider").value = cur;
+    $("#curTime").textContent = fmtTime(cur); $("#durTime").textContent = fmtTime(dur);
+  }, 500);
 }
 
 function markApplying() {
@@ -912,6 +945,7 @@ function renderNowPlaying() {
   const btn = $("#playPauseBtn");
   btn.textContent = st?.playing ? "⏸ หยุด" : "▶ เล่น";
   btn.disabled = !r?.isHost || !st?.videoId;
+  $("#seekSlider").disabled = !r?.isHost || !st?.videoId;
 }
 function updateHostUI() {
   const r = room; if (!r) return;
@@ -1051,20 +1085,29 @@ function trimHistory() {
 }
 function renderHistory() {
   const r = room; if (!r) return;
-  const items = [...(r.historyItems || [])].reverse();
-  $("#historyList").innerHTML = items.length ? items.map(it => `
+  let items = [...(r.historyItems || [])].reverse();
+  if (historyQuery) { const q = historyQuery.toLowerCase(); items = items.filter(it => (it.title || it.videoId).toLowerCase().includes(q)); }
+  const shown = historyExpanded ? items : items.slice(0, 4);
+  const rows = shown.map(it => `
     <li data-key="${esc(it.key)}">
       <div class="qmain"><div class="info"><b>${esc(it.title || it.videoId)}</b></div></div>
       <div class="qacts"><button data-act="requeue" class="play" type="button" title="เพิ่มกลับเข้าคิว" aria-label="เพิ่มกลับเข้าคิว">+</button></div>
-    </li>`).join("") : '<li class="emptyq" style="border:0;background:none;padding:.2rem 0">ยังไม่มีประวัติ</li>';
+    </li>`).join("");
+  const more = items.length > 4
+    ? `<li class="emptyq" style="border:0;background:none;padding:.2rem 0"><button class="btn ghost small" data-act="toggleExpand" type="button">${historyExpanded ? "ย่อกลับ" : `ดูทั้งหมด (${items.length})`}</button></li>`
+    : "";
+  $("#historyList").innerHTML = items.length ? rows + more : '<li class="emptyq" style="border:0;background:none;padding:.2rem 0">ยังไม่มีประวัติ</li>';
 }
+$("#historySearch").addEventListener("input", e => { historyQuery = e.target.value.trim(); historyExpanded = true; renderHistory(); });
 $("#addTabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-atab]"); if (!b) return;
   $("#addTabs").querySelectorAll("button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
   $("#addPane").hidden = b.dataset.atab !== "add";
-  $("#historyList").hidden = b.dataset.atab !== "history";
+  $("#historyPane").hidden = b.dataset.atab !== "history";
 });
 $("#historyList").addEventListener("click", async e => {
+  const toggleBtn = e.target.closest('[data-act="toggleExpand"]');
+  if (toggleBtn) { historyExpanded = !historyExpanded; renderHistory(); return; }
   const b = e.target.closest('[data-act="requeue"]'); if (!b) return;
   const r = room; if (!r) return;
   const it = (r.historyItems || []).find(x => x.key === b.closest("li").dataset.key); if (!it) return;
@@ -1178,7 +1221,7 @@ $("#fsBtn").addEventListener("click", () => {
 });
 function closeStage() {
   const r = room; if (!r) return; room = null;
-  clearInterval(r.watch); clearInterval(r.sync); clearTimeout(r.applyTimer);
+  clearInterval(r.watch); clearInterval(r.sync); clearInterval(r.seekWatch); clearTimeout(r.applyTimer);
   clearTimeout(r.voteTimer); clearInterval(r.voteTick);
   r.unsubs.forEach(u => { try { u(); } catch { } });
   if (r.pref) { onDisconnect(r.pref).cancel().catch(() => { }); remove(r.pref).catch(() => { }); }
