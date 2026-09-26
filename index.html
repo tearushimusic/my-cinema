@@ -785,7 +785,7 @@ $("#accForm").addEventListener("submit", async e => {
     const email = mkEmail(username, 1), uid = await createAuthUser(email, pw);
     const b = writeBatch(db);
     b.set(doc(db, "accounts", uid), { username, displayName, role, status: "active", createdAt: serverTimestamp() });
-    b.set(doc(db, "usernames", username), { uid, authEmail: email, ver: 1 });
+    b.set(doc(db, "usernames", username), { uid, authEmail: email, ver: 1, role });
     await b.commit(); await setRole(uid, role);
     logEvent("account_add", `${username} (${role})`); e.target.reset(); toast("เพิ่มบัญชีแล้ว"); loadAccounts();
   } catch (ex) { err(explain(ex)); }
@@ -810,7 +810,10 @@ $("#accList").addEventListener("click", e => {
       async f => {
         const patch = { displayName: f.get("displayName").trim(), status: f.get("status") };
         if (isSuper()) patch.role = f.get("role");
-        await updateDoc(doc(db, "accounts", acc.uid), patch);
+        const bt = writeBatch(db);
+        bt.update(doc(db, "accounts", acc.uid), patch);
+        if (patch.role && patch.role !== acc.role) bt.update(doc(db, "usernames", acc.username), { role: patch.role });
+        await bt.commit();
         await setRole(acc.uid, patch.status === "active" ? (patch.role || acc.role) : null);
         logEvent("account_edit", `${acc.username}: ${JSON.stringify(patch)}`); loadAccounts();
       });
@@ -822,7 +825,7 @@ $("#accList").addEventListener("click", e => {
       const bt = writeBatch(db);
       bt.set(doc(db, "accounts", uid2), { username: acc.username, displayName: acc.displayName, role: acc.role, status: acc.status, createdAt: acc.createdAt || serverTimestamp() });
       bt.delete(doc(db, "accounts", acc.uid));
-      bt.update(doc(db, "usernames", acc.username), { uid: uid2, authEmail: email, ver });
+      bt.update(doc(db, "usernames", acc.username), { uid: uid2, authEmail: email, ver, role: acc.role });
       await bt.commit();
       await setRole(uid2, acc.status === "active" ? acc.role : null); await setRole(acc.uid, null);
       logEvent("password_reset", acc.username); toast("ตั้งรหัสผ่านใหม่แล้ว"); loadAccounts();
