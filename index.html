@@ -128,8 +128,12 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1);animation:curtainR .
 .miniBar button:hover{background:rgba(255,255,255,.15);border-radius:4px}
 #stageDock.mini #joinOverlay,#stageDock.mini #emptyOverlay{display:none}
 #roomStageSlot{aspect-ratio:16/9;margin-bottom:1.4rem}
-.playbar{display:flex;align-items:center;gap:.8rem;margin:.9rem 0}
+.playbar{display:flex;align-items:center;gap:.8rem;margin:.9rem 0;flex-wrap:wrap}
 .playbar .btn:disabled{opacity:.4;cursor:not-allowed}
+.volCtrl{display:flex;align-items:center;gap:.4rem;margin-left:auto}
+.volCtrl button{background:transparent;border:1px solid var(--line);color:var(--ivory);border-radius:8px;width:2.1rem;height:2.1rem;cursor:pointer;font-size:1rem;flex:0 0 auto}
+.volCtrl button:hover{background:var(--panel)}
+.volCtrl input[type=range]{width:110px;accent-color:var(--brass)}
 
 /* จัดวางฝั่งขวา: กำลังฉาย + คิว */
 .roomGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
@@ -296,6 +300,10 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
           <button class="btn" id="playPauseBtn" type="button" disabled>▶ เล่น</button>
           <button class="btn ghost small" id="transferHostBtn" type="button" hidden>โอนหัวหน้าห้อง</button>
           <span class="muted" id="hostInfo"></span>
+          <div class="volCtrl">
+            <button type="button" id="muteBtn" title="ปิด/เปิดเสียง">🔊</button>
+            <input type="range" id="volSlider" min="0" max="100" value="100" title="ระดับเสียง">
+          </div>
         </div>
         <div class="roomtools">
           <form class="row" id="videoForm">
@@ -438,7 +446,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.11"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.12"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -780,6 +788,7 @@ function createPlayer(st) {
     events: {
       onReady: () => {
         r.ready = true; $("#joinOverlay").hidden = true; if (r.state?.videoId) applyState(r.state);
+        applySavedVolume(r.player);
         if ("mediaSession" in navigator) {
           navigator.mediaSession.metadata = new MediaMetadata({ title: $("#roomTitle").textContent || "กำลังฉาย", artist: site.siteName || "โรงหนัง" });
           navigator.mediaSession.setActionHandler("play", () => r.player?.playVideo());
@@ -907,6 +916,33 @@ $("#transferHostBtn").addEventListener("click", () => {
       await set(ref(rdb, `rooms/${r.id}/host`), f.get("target"));
       toast("โอนหัวหน้าห้องแล้ว");
     });
+});
+
+/* ---------- เสียง (ปรับส่วนตัวของแต่ละคน ไม่เกี่ยวกับหัวหน้าห้อง) ---------- */
+function saveVolPref(vol, muted) { try { localStorage.setItem("cinemaVolume", JSON.stringify({ vol, muted })); } catch { } }
+function loadVolPref() { try { return JSON.parse(localStorage.getItem("cinemaVolume") || "{}"); } catch { return {}; } }
+function applySavedVolume(p) {
+  const s = loadVolPref(), vol = typeof s.vol === "number" ? s.vol : 100;
+  $("#volSlider").value = vol;
+  p.setVolume(vol);
+  if (s.muted) { p.mute(); $("#muteBtn").textContent = "🔇"; }
+  else { p.unMute(); $("#muteBtn").textContent = vol === 0 ? "🔈" : "🔊"; }
+}
+$("#volSlider").addEventListener("input", e => {
+  const r = room; if (!r?.player) return;
+  const v = Number(e.target.value);
+  r.player.setVolume(v);
+  if (v > 0 && r.player.isMuted()) r.player.unMute();
+  const muted = v === 0 || r.player.isMuted();
+  $("#muteBtn").textContent = v === 0 ? "🔈" : muted ? "🔇" : "🔊";
+  saveVolPref(v, muted);
+});
+$("#muteBtn").addEventListener("click", () => {
+  const r = room; if (!r?.player) return;
+  const willMute = !r.player.isMuted();
+  willMute ? r.player.mute() : r.player.unMute();
+  $("#muteBtn").textContent = willMute ? "🔇" : (Number($("#volSlider").value) === 0 ? "🔈" : "🔊");
+  saveVolPref(Number($("#volSlider").value), willMute);
 });
 
 /* ---------- โหวตหัวหน้าห้องใหม่ ---------- */
