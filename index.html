@@ -114,7 +114,9 @@ body[data-view="login"]::after{bottom:-16vw;right:-10vw;background:var(--accent2
 #stageDock.mini{border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
 #stageDock.mode-switching{transition:border-radius .25s ease,box-shadow .25s ease}
 .stage{position:relative;width:100%;height:100%;background:#000;border:2px solid var(--accent2);border-radius:inherit;box-shadow:0 0 0 6px var(--bg2);overflow:hidden}
+.stage:fullscreen,.stage:-webkit-full-screen{border:0;border-radius:0;box-shadow:none}
 #stageDock:not(.mini) .stage{box-shadow:0 0 0 6px var(--bg2),0 24px 60px rgba(0,0,0,.55)}
+#stageDock:not(.mini) .stage:fullscreen,#stageDock:not(.mini) .stage:-webkit-full-screen{box-shadow:none}
 .stage #playerHolder,.stage #playerHolder iframe{position:absolute;inset:0;width:100%;height:100%}
 .overlay{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:1rem;background:rgba(42,13,22,.92);z-index:2}
 .miniBar{display:none;position:absolute;top:0;left:0;right:0;z-index:3;background:rgba(0,0,0,.6);color:#fff;align-items:center;gap:.3rem;padding:.25rem .4rem}
@@ -130,6 +132,7 @@ body[data-view="login"]::after{bottom:-16vw;right:-10vw;background:var(--accent2
 .volCtrl button{background:transparent;border:1px solid var(--line);color:var(--ivory);border-radius:8px;width:2.1rem;height:2.1rem;cursor:pointer;font-size:1rem;flex:0 0 auto}
 .volCtrl button:hover{background:var(--panel)}
 .volCtrl input[type=range]{width:110px;accent-color:var(--accent)}
+.volCtrl input[type=number]{width:3.2rem;padding:.3rem .35rem;text-align:right;flex:0 0 auto}
 
 /* จัดวางฝั่งขวา: กำลังฉาย + คิว */
 .roomGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
@@ -303,6 +306,8 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
           <div class="volCtrl">
             <button type="button" id="muteBtn" title="ปิด/เปิดเสียง">🔊</button>
             <input type="range" id="volSlider" min="0" max="100" value="100" title="ระดับเสียง">
+            <input type="number" id="volNum" min="0" max="100" value="100" title="พิมพ์ระดับเสียงเอง">
+            <span class="muted">%</span>
           </div>
         </div>
         <div class="row" id="viewCtrlRow">
@@ -321,28 +326,30 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
       </div>
       <aside class="roomSide">
         <div class="sideBox">
-          <h3>เพิ่มคลิป</h3>
-          <form id="videoForm">
-            <label for="vUrl">ลิงก์ YouTube</label>
-            <input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required>
-            <button class="btn" type="submit">เพิ่มเข้าคิว</button>
-          </form>
-          <div id="fromPlaylistRow" hidden>
-            <label for="pickPlaylist">เพิ่มจากเพลย์ลิสต์ของฉัน</label><select id="pickPlaylist"></select>
-            <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
+          <div class="tabs" role="tablist" id="addTabs">
+            <button role="tab" data-atab="add" aria-selected="true" type="button">เพิ่มคลิป</button>
+            <button role="tab" data-atab="history" aria-selected="false" type="button">ประวัติ</button>
           </div>
+          <div id="addPane">
+            <form id="videoForm">
+              <label for="vUrl">ลิงก์ YouTube</label>
+              <input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+              <button class="btn" type="submit">เพิ่มเข้าคิว</button>
+            </form>
+            <div id="fromPlaylistRow" hidden>
+              <label for="pickPlaylist">เพิ่มจากเพลย์ลิสต์ของฉัน</label><select id="pickPlaylist"></select>
+              <button class="btn ghost" id="addFromPlaylistBtn" type="button">เพิ่มทั้งหมดเข้าคิว</button>
+            </div>
+          </div>
+          <ol class="queue" id="historyList" hidden></ol>
         </div>
         <div class="sideBox">
           <h3>กำลังฉาย</h3>
           <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
         </div>
         <div class="sideBox">
-          <div class="tabs" role="tablist" id="queueTabs">
-            <button role="tab" data-qtab="queue" aria-selected="true" type="button">คิวถัดไป (<span id="queueCount">0</span>)</button>
-            <button role="tab" data-qtab="history" aria-selected="false" type="button">ประวัติ</button>
-          </div>
+          <h3>คิวถัดไป (<span id="queueCount">0</span>)</h3>
           <ol class="queue" id="queueList"></ol>
-          <ol class="queue" id="historyList" hidden></ol>
         </div>
       </aside>
     </div>
@@ -460,7 +467,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.15"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.16"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -730,8 +737,8 @@ async function openRoom(id) {
   $("#emptyOverlay").hidden = true;
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
   $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#miniTitle").textContent = ""; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
-  $("#historyList").innerHTML = ""; $("#historyList").hidden = true; $("#queueList").hidden = false;
-  $("#queueTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.qtab === "queue" ? "true" : "false"));
+  $("#historyList").innerHTML = ""; $("#historyList").hidden = true; $("#addPane").hidden = false;
+  $("#addTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.atab === "add" ? "true" : "false"));
   $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น"; $("#transferHostBtn").hidden = true;
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
   room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null, historyItems: [] };
@@ -949,20 +956,24 @@ function saveVolPref(vol, muted) { try { localStorage.setItem("cinemaVolume", JS
 function loadVolPref() { try { return JSON.parse(localStorage.getItem("cinemaVolume") || "{}"); } catch { return {}; } }
 function applySavedVolume(p) {
   const s = loadVolPref(), vol = typeof s.vol === "number" ? s.vol : 100;
-  $("#volSlider").value = vol;
+  $("#volSlider").value = vol; $("#volNum").value = vol;
   p.setVolume(vol);
   if (s.muted) { p.mute(); $("#muteBtn").textContent = "🔇"; }
   else { p.unMute(); $("#muteBtn").textContent = vol === 0 ? "🔈" : "🔊"; }
 }
-$("#volSlider").addEventListener("input", e => {
+function setVolumeTo(v) {
   const r = room; if (!r?.player) return;
-  const v = Number(e.target.value);
+  v = Math.max(0, Math.min(100, Math.round(v)));
   r.player.setVolume(v);
   if (v > 0 && r.player.isMuted()) r.player.unMute();
   const muted = v === 0 || r.player.isMuted();
+  $("#volSlider").value = v; $("#volNum").value = v;
   $("#muteBtn").textContent = v === 0 ? "🔈" : muted ? "🔇" : "🔊";
   saveVolPref(v, muted);
-});
+}
+$("#volSlider").addEventListener("input", e => setVolumeTo(Number(e.target.value)));
+$("#volNum").addEventListener("input", e => { if (e.target.value !== "") setVolumeTo(Number(e.target.value)); });
+$("#volNum").addEventListener("blur", e => { if (e.target.value === "") setVolumeTo(0); });
 $("#muteBtn").addEventListener("click", () => {
   const r = room; if (!r?.player) return;
   const willMute = !r.player.isMuted();
@@ -1059,14 +1070,14 @@ function renderHistory() {
   $("#historyList").innerHTML = items.length ? items.map(it => `
     <li data-key="${esc(it.key)}">
       <div class="qmain"><div class="info"><b>${esc(it.title || it.videoId)}</b></div></div>
-      <div class="qacts"><button data-act="requeue" class="play" type="button">+ เพิ่มกลับเข้าคิว</button></div>
+      <div class="qacts"><button data-act="requeue" class="play" type="button" title="เพิ่มกลับเข้าคิว" aria-label="เพิ่มกลับเข้าคิว">+</button></div>
     </li>`).join("") : '<li class="emptyq" style="border:0;background:none;padding:.2rem 0">ยังไม่มีประวัติ</li>';
 }
-$("#queueTabs").addEventListener("click", e => {
-  const b = e.target.closest("button[data-qtab]"); if (!b) return;
-  $("#queueTabs").querySelectorAll("button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
-  $("#queueList").hidden = b.dataset.qtab !== "queue";
-  $("#historyList").hidden = b.dataset.qtab !== "history";
+$("#addTabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-atab]"); if (!b) return;
+  $("#addTabs").querySelectorAll("button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+  $("#addPane").hidden = b.dataset.atab !== "add";
+  $("#historyList").hidden = b.dataset.atab !== "history";
 });
 $("#historyList").addEventListener("click", async e => {
   const b = e.target.closest('[data-act="requeue"]'); if (!b) return;
