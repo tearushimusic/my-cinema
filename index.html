@@ -7,6 +7,8 @@
 <link rel="icon" id="favicon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.youtube.com">
+<link rel="preconnect" href="https://www.gstatic.com">
 <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -85,6 +87,13 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1);animation:curtainR .
 .login-card h1{text-align:center;font-size:1.7rem;color:var(--brass)}
 .login-card p.sub{text-align:center;margin:.3rem 0 1rem}
 .login-card .btn{width:100%;margin-top:1rem;padding:.7rem}
+.pwWrap{position:relative}
+.pwWrap input{padding-right:2.6rem}
+.pwEye{position:absolute;right:.3rem;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--mute);cursor:pointer;font-size:1.05rem;padding:.35rem;line-height:1}
+.pwEye:hover{color:var(--ivory)}
+.rememberRow{display:flex;align-items:center;gap:.5rem;margin-top:.9rem;font-size:.9rem;color:var(--mute)}
+.rememberRow input{width:auto;accent-color:var(--brass)}
+.spinner{display:inline-block;width:1rem;height:1rem;border:2px solid rgba(0,0,0,.3);border-top-color:currentColor;border-radius:50%;animation:spin360 .7s linear infinite;vertical-align:-2px;margin-right:.4rem}
 
 /* ฮับ: บัตรตั๋ว */
 .head{display:flex;align-items:end;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin:.4rem 0 1.2rem}
@@ -193,7 +202,8 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
     <label for="lUser">Username</label>
     <input id="lUser" autocomplete="username" autocapitalize="none" required>
     <label for="lPass">รหัสผ่าน</label>
-    <input id="lPass" type="password" autocomplete="current-password" required>
+    <div class="pwWrap"><input id="lPass" type="password" autocomplete="current-password" required><button class="pwEye" type="button" aria-label="แสดงรหัสผ่าน">👁</button></div>
+    <label class="rememberRow"><input id="rememberMe" type="checkbox">จดจำการเข้าสู่ระบบ</label>
     <p class="err" id="loginErr" role="alert"></p>
     <button class="btn" type="submit">เข้าสู่ระบบ</button>
   </form>
@@ -220,6 +230,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
     <div class="head"><h2 id="roomTitle"></h2><span class="muted">ทุกคนในโรงควบคุมคลิปได้</span></div>
     <div class="stage">
       <div id="playerHolder"></div>
+      <div id="ytProbeHolder" style="position:fixed;left:-9999px;top:-9999px;width:200px;height:200px"></div>
       <div class="overlay" id="joinOverlay">
         <div>
           <p>กดปุ่มเพื่อเข้านั่งในโรง คลิปจะตรงกับเพื่อนทุกคน</p>
@@ -315,7 +326,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
-  EmailAuthProvider, reauthenticateWithCredential, updatePassword }
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword, setPersistence, browserLocalPersistence, browserSessionPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, orderBy, limit,
   where, onSnapshot, getDocs, writeBatch, serverTimestamp, Timestamp }
@@ -333,7 +344,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.4"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.5"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -420,19 +431,31 @@ $("#refreshBtn").addEventListener("click", e => {
   const btn = e.currentTarget; btn.classList.remove("spin"); void btn.offsetWidth; btn.classList.add("spin");
   route(); toast("รีเฟรชข้อมูลแล้ว");
 });
+document.addEventListener("click", e => {
+  const b = e.target.closest(".pwEye"); if (!b) return;
+  const input = b.previousElementSibling; if (!input) return;
+  const show = input.type === "password";
+  input.type = show ? "text" : "password"; b.textContent = show ? "🙈" : "👁";
+});
 
 /* ---------- ล็อกอิน / ออก ---------- */
+try { const savedUser = localStorage.getItem("rememberedUsername"); if (savedUser) { $("#lUser").value = savedUser; $("#rememberMe").checked = true; } } catch { }
 $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
   const u = $("#lUser").value.trim().toLowerCase(), p = $("#lPass").value, err = t => $("#loginErr").textContent = t;
+  const remember = $("#rememberMe").checked, btn = e.target.querySelector('button[type="submit"]');
   err("");
   if (!/^[a-z0-9_]{3,20}$/.test(u)) return err("username ใช้ a-z, 0-9 และ _ ยาว 3-20 ตัว");
+  btn.disabled = true; const origLabel = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>กำลังเข้าสู่ระบบ...';
   try {
     const un = await getDoc(doc(db, "usernames", u));
-    if (!un.exists()) return err("username หรือรหัสผ่านไม่ถูกต้อง");
+    if (!un.exists()) { err("username หรือรหัสผ่านไม่ถูกต้อง"); return; }
+    await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    try { remember ? localStorage.setItem("rememberedUsername", u) : localStorage.removeItem("rememberedUsername"); } catch { }
     pendingLoginLog = true;
     await signInWithEmailAndPassword(auth, un.data().authEmail, p);
   } catch (ex) { pendingLoginLog = false; err(ex.code === "auth/too-many-requests" ? explain(ex) : "username หรือรหัสผ่านไม่ถูกต้อง"); }
+  finally { btn.disabled = false; btn.innerHTML = origLabel; }
 });
 /* ---------- ดร็อปดาวน์โปรไฟล์ ---------- */
 const profileBtn = $("#profileBtn"), profileDrop = $("#profileDrop");
@@ -459,9 +482,9 @@ $("#menuRename").addEventListener("click", () => {
 $("#menuPassword").addEventListener("click", () => {
   closeProfileMenu();
   askDialog("เปลี่ยนรหัสผ่าน", `
-    <label>รหัสผ่านเดิม</label><input name="old" type="password" autocomplete="current-password" required>
-    <label>รหัสผ่านใหม่ (6 ตัวขึ้นไป)</label><input name="new1" type="password" autocomplete="new-password" minlength="6" required>
-    <label>ยืนยันรหัสผ่านใหม่</label><input name="new2" type="password" autocomplete="new-password" minlength="6" required>`,
+    <label>รหัสผ่านเดิม</label><div class="pwWrap"><input name="old" type="password" autocomplete="current-password" required><button class="pwEye" type="button" aria-label="แสดงรหัสผ่าน">👁</button></div>
+    <label>รหัสผ่านใหม่ (6 ตัวขึ้นไป)</label><div class="pwWrap"><input name="new1" type="password" autocomplete="new-password" minlength="6" required><button class="pwEye" type="button" aria-label="แสดงรหัสผ่าน">👁</button></div>
+    <label>ยืนยันรหัสผ่านใหม่</label><div class="pwWrap"><input name="new2" type="password" autocomplete="new-password" minlength="6" required><button class="pwEye" type="button" aria-label="แสดงรหัสผ่าน">👁</button></div>`,
     async f => {
       const oldPw = f.get("old"), p1 = f.get("new1"), p2 = f.get("new2");
       if (p1.length < 6) throw new Error("รหัสผ่านใหม่อย่างน้อย 6 ตัว");
@@ -711,13 +734,35 @@ async function advanceQueue(endedVideoId) {
     if (res.committed && res.snapshot.val()?.videoId === next.videoId) remove(ref(rdb, `rooms/${r.id}/queue/${next.key}`)).catch(() => { });
   } catch (ex) { toast(explain(ex), "err"); }
 }
+function probeEmbeddable(videoId) {
+  return new Promise(resolve => {
+    loadYT().then(() => {
+      $("#ytProbeHolder").innerHTML = '<div id="ytprobe"></div>';
+      let done = false, p;
+      const finish = ok => { if (done) return; done = true; clearTimeout(timer); try { p?.destroy(); } catch { } resolve(ok); };
+      const timer = setTimeout(() => finish(true), 4000); // ไม่มีข้อผิดพลาดภายในเวลานี้ ถือว่าเล่นได้
+      p = new YT.Player("ytprobe", {
+        width: "200", height: "200", videoId,
+        playerVars: { autoplay: 0, controls: 0 },
+        events: {
+          onReady: () => setTimeout(() => finish(true), 350), // เผื่อเวลาเล็กน้อยให้ error (ถ้ามี) มาทันก่อนสรุปว่าเล่นได้
+          onError: () => finish(false)
+        }
+      });
+    }).catch(() => resolve(true)); // โหลด YT API ไม่ได้ ก็ปล่อยผ่านไปก่อน ไปเจอ error ตอนเล่นจริงแทน
+  });
+}
 $("#videoForm").addEventListener("submit", async e => {
   e.preventDefault();
   const r = room; if (!r) return;
   const id = parseYouTubeId($("#vUrl").value);
   if (!id) return toast("ลิงก์ YouTube ไม่ถูกต้อง", "err");
   $("#vUrl").value = "";
+  const btn = e.target.querySelector('button[type="submit"]'), orig = btn.textContent;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>กำลังตรวจสอบ...';
   try {
+    const ok = await probeEmbeddable(id);
+    if (!ok) { toast("คลิปนี้เจ้าของไม่อนุญาตให้ฝัง เลือกคลิปอื่น", "err"); return; }
     if (!r.state?.videoId && !r.queueItems.length) {
       await set(ref(rdb, `rooms/${r.id}/state`), { videoId: id, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username });
       toast("เริ่มฉายเลย");
@@ -727,6 +772,7 @@ $("#videoForm").addEventListener("submit", async e => {
       toast("เพิ่มเข้าคิวแล้ว");
     }
   } catch (ex) { toast(explain(ex), "err"); }
+  finally { btn.disabled = false; btn.textContent = orig; }
 });
 $("#queueList").addEventListener("click", async e => {
   const b = e.target.closest("button[data-act]"); if (!b) return;
@@ -803,7 +849,7 @@ $("#addAccBtn").addEventListener("click", () => {
   askDialog("เพิ่มบัญชี", `
     <label>Username (a-z 0-9 _)</label><input name="username" maxlength="20" autocapitalize="none" autocomplete="off" required>
     <label>ชื่อที่แสดง</label><input name="displayName" maxlength="40" required>
-    <label>รหัสผ่าน (6 ตัวขึ้นไป)</label><input name="pw" type="text" minlength="6" autocomplete="off" required>
+    <label>รหัสผ่าน (6 ตัวขึ้นไป)</label><div class="pwWrap"><input name="pw" type="password" minlength="6" autocomplete="off" required><button class="pwEye" type="button" aria-label="แสดงรหัสผ่าน">👁</button></div>
     ${isSuper() ? `<label>บทบาท</label><select name="role"><option value="member">สมาชิก</option><option value="admin">แอดมิน</option></select>` : ""}`,
     async f => {
       const username = f.get("username").trim().toLowerCase(), displayName = f.get("displayName").trim(), pw = f.get("pw");
@@ -847,7 +893,7 @@ $("#accList").addEventListener("click", e => {
         logEvent("account_edit", `${acc.username}: ${JSON.stringify(patch)}`); loadAccounts();
       });
   } else if (b.dataset.act === "reset") {
-    askDialog(`รีเซ็ตรหัสผ่าน ${acc.username}`, `<label>รหัสผ่านใหม่ (6 ตัวขึ้นไป)</label><input name="pw" type="text" minlength="6" required>`, async f => {
+    askDialog(`รีเซ็ตรหัสผ่าน ${acc.username}`, `<label>รหัสผ่านใหม่ (6 ตัวขึ้นไป)</label><div class="pwWrap"><input name="pw" type="password" minlength="6" required><button class="pwEye" type="button" aria-label="แสดงรหัสผ่าน">👁</button></div>`, async f => {
       const pw = f.get("pw"); if (pw.length < 6) throw new Error("รหัสผ่านอย่างน้อย 6 ตัว");
       const un = await getDoc(doc(db, "usernames", acc.username)), ver = (un.data()?.ver || 1) + 1;
       const email = mkEmail(acc.username, ver), uid2 = await createAuthUser(email, pw);
@@ -928,6 +974,7 @@ $("#logsClear").addEventListener("click", async () => {
 });
 
 loadSite();
+loadYT(); // เริ่มโหลดสคริปต์ YouTube Player ล่วงหน้าตั้งแต่เปิดเว็บ ลดอาการหน่วงตอนดูคลิปครั้งแรก
 </script>
 </body>
 </html>
