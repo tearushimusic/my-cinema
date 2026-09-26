@@ -95,7 +95,7 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .ticket:hover{border-color:var(--accent2)}
 .ticket .main h3{font-size:1.2rem}
 .ticket .stub{display:flex;gap:.6rem;align-items:center;margin-top:.2rem}
-.ticket .stub a.btn{text-decoration:none;text-align:center;flex:1}
+.ticket .stub .btn{text-decoration:none;text-align:center;flex:1}
 .empty{border:2px dashed var(--line);border-radius:12px;padding:2rem;text-align:center;color:var(--mute)}
 .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:1.1rem 1.3rem;margin-bottom:1rem}
 .row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:end}
@@ -119,6 +119,15 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .miniBar button{background:transparent;border:0;color:#fff;cursor:pointer;font-size:.95rem;padding:.15rem .35rem;line-height:1}
 .miniBar button:hover{background:rgba(255,255,255,.15);border-radius:4px}
 #stageDock.mini #joinOverlay,#stageDock.mini #emptyOverlay{display:none}
+.reactDock{position:absolute;right:.6rem;bottom:.6rem;z-index:4}
+#stageDock.mini .reactDock{display:none}
+#reactToggle{width:2.3rem;height:2.3rem;border-radius:50%;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:1.15rem;cursor:pointer;line-height:1}
+#reactToggle:hover{background:rgba(0,0,0,.75)}
+.reactPicker{position:absolute;right:0;bottom:2.9rem;background:rgba(15,15,17,.95);border:1px solid var(--line);border-radius:14px;padding:.5rem;display:grid;grid-template-columns:repeat(5,1fr);gap:.1rem;width:11.5rem}
+.reactPicker button{background:transparent;border:0;font-size:1.3rem;padding:.3rem;border-radius:8px;cursor:pointer;line-height:1.4}
+.reactPicker button:hover{background:rgba(255,255,255,.12)}
+.floatEmoji{position:absolute;bottom:8%;font-size:2rem;pointer-events:none;z-index:5;animation:floatUp 3s ease-out forwards}
+@keyframes floatUp{0%{transform:translateY(0) scale(.5);opacity:0}12%{opacity:1;transform:translateY(-8%) scale(1)}100%{transform:translateY(-340%) scale(1.15);opacity:0}}
 #roomStageSlot{aspect-ratio:16/9;margin-bottom:1.4rem}
 .playbar{display:flex;align-items:center;gap:.8rem;margin:.9rem 0;flex-wrap:wrap}
 .playbar .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -254,6 +263,10 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
       <button type="button" id="miniExpand" title="กลับไปดูเต็มจอ">⤢</button>
       <button type="button" id="miniClose" title="ปิด">✕</button>
     </div>
+    <div class="reactDock" id="reactDock">
+      <div class="reactPicker" id="reactPicker" hidden></div>
+      <button type="button" id="reactToggle" title="ส่งรีแอ็คชั่น">😀</button>
+    </div>
   </div>
 </div>
 
@@ -281,6 +294,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
       <div class="row">
         <div><label for="cName">ชื่อโรง</label><input id="cName" maxlength="40" required></div>
         <div><label for="cDesc">คำอธิบายสั้นๆ (ไม่ใส่ก็ได้)</label><input id="cDesc" maxlength="80"></div>
+        <div><label for="cCode">รหัสโรงหนัง (ไม่ใส่ก็ได้)</label><input id="cCode" maxlength="20"></div>
         <button class="btn" type="submit">เพิ่มโรง</button>
       </div>
     </form>
@@ -382,7 +396,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <section id="view-settings" hidden>
   <div class="wrap">
     <div class="head"><h2>ตั้งค่า</h2></div>
-    <div class="tabs" role="tablist">
+    <div class="tabs" role="tablist" id="settingsTabs">
       <button role="tab" data-tab="accounts" aria-selected="true">บัญชีผู้ใช้</button>
       <button role="tab" data-tab="site" aria-selected="false">เว็บไซต์</button>
       <button role="tab" data-tab="logs" id="tabLogsBtn" aria-selected="false" hidden>ประวัติการใช้งาน</button>
@@ -429,6 +443,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
     <div id="dlgFields"></div>
     <p class="err" id="dlgErr" role="alert"></p>
     <div class="actions">
+      <button class="btn danger" type="button" id="dlgExtra" hidden style="margin-right:auto">ลบ</button>
       <button class="btn ghost" type="button" id="dlgCancel">ยกเลิก</button>
       <button class="btn" type="submit" id="dlgOk">บันทึก</button>
     </div>
@@ -457,7 +472,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, orderBy, limit,
   where, onSnapshot, getDocs, writeBatch, serverTimestamp, Timestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getDatabase, ref, set, remove, onValue, onDisconnect, push, update, runTransaction, serverTimestamp as rtdbTs }
+import { getDatabase, ref, set, remove, onValue, onChildAdded, onDisconnect, push, update, runTransaction, serverTimestamp as rtdbTs }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 /* ========== 1) ใส่ค่า config จาก Firebase Console ตรงนี้ ========== */
@@ -470,7 +485,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.19"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.20"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -692,33 +707,64 @@ onAuthStateChanged(auth, async user => {
 });
 
 /* ---------- ฮับ ---------- */
+let hubCache = [];
 function openHub() {
   show("hub");
   $("#cinemaForm").hidden = !isAdmin();
   hubUnsub = onSnapshot(query(collection(db, "cinemas"), orderBy("createdAt", "asc")), snap => {
+    hubCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const el = $("#ticketList");
-    if (snap.empty) { el.innerHTML = `<div class="empty">ยังไม่มีโรงหนัง${isAdmin() ? " เพิ่มโรงแรกด้วยฟอร์มด้านบนได้เลย" : " รอแอดมินเปิดโรงก่อนนะ"}</div>`; return; }
-    el.innerHTML = snap.docs.map(d => {
-      const c = d.data();
-      return `<div class="ticket"><div class="main"><h3>${esc(c.name)}</h3><p class="muted">${esc(c.desc || "")}</p></div>
-        <div class="stub"><a class="btn" href="#/room/${encodeURIComponent(d.id)}">เข้าโรง</a>
-        ${isAdmin() ? `<button class="btn danger small" data-del="${esc(d.id)}" data-name="${esc(c.name)}" type="button">ลบโรง</button>` : ""}</div></div>`;
-    }).join("");
+    if (!hubCache.length) { el.innerHTML = `<div class="empty">ยังไม่มีโรงหนัง${isAdmin() ? " เพิ่มโรงแรกด้วยฟอร์มด้านบนได้เลย" : " รอแอดมินเปิดโรงก่อนนะ"}</div>`; return; }
+    el.innerHTML = hubCache.map(c => `<div class="ticket"><div class="main"><h3>${esc(c.name)}</h3><p class="muted">${esc(c.desc || "")}</p></div>
+        <div class="stub"><button class="btn" data-enter="${esc(c.id)}" type="button">เข้าโรง</button>
+        ${isAdmin() ? `<button class="btn ghost small" data-edit="${esc(c.id)}" type="button">แก้ไข</button>` : ""}</div></div>`).join("");
   }, ex => toast(explain(ex), "err"));
 }
 $("#cinemaForm").addEventListener("submit", async e => {
   e.preventDefault();
-  const name = $("#cName").value.trim(), desc = $("#cDesc").value.trim();
+  const name = $("#cName").value.trim(), desc = $("#cDesc").value.trim(), code = $("#cCode").value.trim();
   if (!name) return;
-  try { await addDoc(collection(db, "cinemas"), { name, desc, createdBy: me.username, createdAt: serverTimestamp() }); logEvent("cinema_add", name); e.target.reset(); }
-  catch (ex) { toast(explain(ex), "err"); }
+  try {
+    const payload = { name, desc, createdBy: me.username, createdAt: serverTimestamp() };
+    if (code) payload.code = code;
+    await addDoc(collection(db, "cinemas"), payload); logEvent("cinema_add", name); e.target.reset();
+  } catch (ex) { toast(explain(ex), "err"); }
 });
-$("#ticketList").addEventListener("click", async e => {
-  const b = e.target.closest("[data-del]"); if (!b) return;
-  const ok = await askConfirm("ลบโรงหนัง", `ลบ "${b.dataset.name}" ? ประวัติการดูในห้องนี้จะหายไปด้วย`, { okLabel: "ลบโรง" });
-  if (!ok) return;
-  try { await deleteDoc(doc(db, "cinemas", b.dataset.del)); remove(ref(rdb, `rooms/${b.dataset.del}`)).catch(() => { }); logEvent("cinema_delete", b.dataset.name); toast("ลบโรงแล้ว"); }
-  catch (ex) { toast(explain(ex), "err"); }
+function enterCinema(id) {
+  const c = hubCache.find(x => x.id === id); if (!c) return;
+  if (!c.code) { location.hash = "#/room/" + encodeURIComponent(id); return; }
+  askDialog(`รหัสเข้าโรง "${c.name}"`, `<label>รหัสโรงหนัง</label><input name="code" type="text" required>`, async f => {
+    if (f.get("code") !== c.code) throw new Error("รหัสไม่ถูกต้อง");
+    location.hash = "#/room/" + encodeURIComponent(id);
+  });
+}
+function openCinemaEdit(id) {
+  const c = hubCache.find(x => x.id === id); if (!c) return;
+  askDialog(`แก้ไข "${c.name}"`, `
+    <label>ชื่อโรงหนัง</label><input name="name" maxlength="40" value="${esc(c.name)}" required>
+    <label>รายละเอียด</label><input name="desc" maxlength="80" value="${esc(c.desc || "")}">
+    <label>รหัสโรงหนัง (ไม่ใส่ก็ได้)</label><input name="code" maxlength="20" value="${esc(c.code || "")}">`,
+    async f => {
+      const name = f.get("name").trim(); if (!name) throw new Error("กรอกชื่อโรงหนัง");
+      await updateDoc(doc(db, "cinemas", id), { name, desc: f.get("desc").trim(), code: f.get("code").trim() });
+      logEvent("cinema_edit", name); toast("บันทึกแล้ว");
+    },
+    {
+      label: "ลบโรงหนัง",
+      onClick: async () => {
+        dlg.close();
+        const ok = await askConfirm("ลบโรงหนัง", `ลบ "${c.name}" ? ประวัติการดูในห้องนี้จะหายไปด้วย`, { okLabel: "ลบโรง" });
+        if (!ok) return;
+        try {
+          await deleteDoc(doc(db, "cinemas", id)); remove(ref(rdb, `rooms/${id}`)).catch(() => { });
+          logEvent("cinema_delete", c.name); toast("ลบโรงแล้ว");
+        } catch (ex) { toast(explain(ex), "err"); }
+      }
+    });
+}
+$("#ticketList").addEventListener("click", e => {
+  const editBtn = e.target.closest("[data-edit]"); if (editBtn) return openCinemaEdit(editBtn.dataset.edit);
+  const enterBtn = e.target.closest("[data-enter]"); if (enterBtn) return enterCinema(enterBtn.dataset.enter);
 });
 
 /* ---------- โรงหนัง (ซิงก์วิดีโอ) ---------- */
@@ -752,6 +798,7 @@ async function openRoom(id) {
   $("#addTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.atab === "add" ? "true" : "false"));
   $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น"; $("#transferHostBtn").hidden = true;
   $("#seekSlider").disabled = true; $("#seekSlider").value = 0; $("#curTime").textContent = "0:00"; $("#durTime").textContent = "0:00";
+  $("#reactDock").hidden = true; $("#reactPicker").hidden = true;
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
   room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null, historyItems: [] };
   const r = room;
@@ -812,6 +859,8 @@ async function joinRoom() {
     r.historyItems = Object.entries(val).map(([key, v]) => ({ key, ...v })).sort((a, b) => (a.playedAt || 0) - (b.playedAt || 0));
     renderHistory();
   }));
+  // รีแอ็คชั่นอิโมจิลอย
+  r.unsubs.push(onChildAdded(ref(rdb, `rooms/${r.id}/reactions`), s => spawnFloatEmoji(s.val()?.emoji)));
   createPlayer(r.state);
   updateStageMode();
 }
@@ -828,7 +877,7 @@ function createPlayer(st) {
     playerVars: { playsinline: 1, rel: 0, modestbranding: 1, controls: 0, disablekb: 1 },
     events: {
       onReady: () => {
-        r.ready = true; $("#joinOverlay").hidden = true; if (r.state?.videoId) applyState(r.state);
+        r.ready = true; $("#joinOverlay").hidden = true; $("#reactDock").hidden = false; if (r.state?.videoId) applyState(r.state);
         applySavedVolume(r.player);
         if ("mediaSession" in navigator) {
           navigator.mediaSession.metadata = new MediaMetadata({ title: $("#roomTitle").textContent || "กำลังฉาย", artist: site.siteName || "โรงหนัง" });
@@ -1000,6 +1049,28 @@ $("#muteBtn").addEventListener("click", () => {
   $("#muteBtn").textContent = willMute ? "🔇" : (Number($("#volSlider").value) === 0 ? "🔈" : "🔊");
   saveVolPref(Number($("#volSlider").value), willMute);
 });
+
+/* ---------- รีแอ็คชั่นอิโมจิลอย ---------- */
+const REACT_EMOJIS = ["😂", "❤️", "😮", "😢", "😡", "👍", "👎", "🔥", "🎉", "😱", "😍", "🤔", "👏", "💀", "😴", "🥹", "🙌", "✨", "💯", "😭", "🤣", "😅", "🫡", "😎", "🥳"];
+$("#reactPicker").innerHTML = REACT_EMOJIS.map(em => `<button type="button" data-emoji="${em}">${em}</button>`).join("");
+$("#reactToggle").addEventListener("click", () => { $("#reactPicker").hidden = !$("#reactPicker").hidden; });
+$("#reactPicker").addEventListener("click", e => {
+  const b = e.target.closest("[data-emoji]"); if (!b || !room) return;
+  $("#reactPicker").hidden = true;
+  const rf = push(ref(rdb, `rooms/${room.id}/reactions`));
+  set(rf, { emoji: b.dataset.emoji, uid: me.uid })
+    .then(() => setTimeout(() => remove(rf).catch(() => { }), 4000))
+    .catch(ex => toast(explain(ex), "err"));
+});
+function spawnFloatEmoji(emoji) {
+  if (!emoji) return;
+  const stage = document.querySelector(".stage"); if (!stage) return;
+  const el = document.createElement("div");
+  el.className = "floatEmoji"; el.textContent = emoji;
+  el.style.left = (8 + Math.random() * 78) + "%";
+  stage.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
 
 /* ---------- โหวตหัวหน้าห้องใหม่ ---------- */
 function renderSeats() {
@@ -1246,7 +1317,7 @@ function switchTab(t) {
   for (const n of ["accounts", "site", "logs"]) $("#tab-" + n).hidden = n !== t;
   if (t === "logs") loadLogs();
 }
-document.querySelector(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) switchTab(b.dataset.tab); });
+document.querySelector("#settingsTabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) switchTab(b.dataset.tab); });
 
 let accCache = [];
 async function loadAccounts() {
@@ -1291,8 +1362,16 @@ $("#addAccBtn").addEventListener("click", () => {
     });
 });
 
-const dlg = $("#dlg"); let dlgHandler = null;
-function askDialog(title, fieldsHtml, onOk) { $("#dlgTitle").textContent = title; $("#dlgFields").innerHTML = fieldsHtml; $("#dlgErr").textContent = ""; dlgHandler = onOk; dlg.showModal(); }
+const dlg = $("#dlg"); let dlgHandler = null, dlgExtraHandler = null;
+function askDialog(title, fieldsHtml, onOk, extra = null) {
+  $("#dlgTitle").textContent = title; $("#dlgFields").innerHTML = fieldsHtml; $("#dlgErr").textContent = "";
+  dlgHandler = onOk;
+  const extraBtn = $("#dlgExtra");
+  if (extra) { extraBtn.hidden = false; extraBtn.textContent = extra.label; dlgExtraHandler = extra.onClick; }
+  else { extraBtn.hidden = true; dlgExtraHandler = null; }
+  dlg.showModal();
+}
+$("#dlgExtra").addEventListener("click", async () => { if (dlgExtraHandler) try { await dlgExtraHandler(); } catch (ex) { $("#dlgErr").textContent = explain(ex); } });
 $("#dlgCancel").addEventListener("click", () => dlg.close());
 $("#dlgForm").addEventListener("submit", async e => {
   e.preventDefault();
