@@ -128,7 +128,9 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1);animation:curtainR .
 .miniBar button:hover{background:rgba(255,255,255,.15);border-radius:4px}
 #stageDock.mini #joinOverlay,#stageDock.mini #emptyOverlay{display:none}
 #roomStageSlot{aspect-ratio:16/9;margin-bottom:1.4rem}
-#roomStageSlot.fullbleed{width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw}
+#roomStageSlot.fullbleed{width:calc(100vw - 6vw);position:relative;left:50%;margin-left:calc(-50vw + 3vw)}
+.playbar{display:flex;align-items:center;gap:.8rem;margin:.9rem 0}
+.playbar .btn:disabled{opacity:.4;cursor:not-allowed}
 
 /* จัดวางฝั่งขวา: กำลังฉาย + คิว */
 .roomGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
@@ -280,11 +282,15 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <!-- โรงหนัง -->
 <section id="view-room" hidden>
   <div class="wrap">
-    <div class="head"><h2 id="roomTitle"></h2><span class="muted">ทุกคนในโรงควบคุมคลิปได้</span>
+    <div class="head"><h2 id="roomTitle"></h2><span class="muted">ทุกคนเพิ่ม/จัดคิวได้ · เล่น-หยุดคุมโดยหัวหน้าห้อง</span>
       <button class="btn ghost small" id="theaterBtn" type="button">ขยายโรง</button></div>
     <div class="roomGrid" id="roomGrid">
       <div class="roomMain">
         <div id="roomStageSlot"></div>
+        <div class="playbar">
+          <button class="btn" id="playPauseBtn" type="button" disabled>▶ เล่น</button>
+          <span class="muted" id="hostInfo"></span>
+        </div>
         <div class="roomtools">
           <form class="row" id="videoForm">
             <div><label for="vUrl">ลิงก์ YouTube</label><input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
@@ -422,7 +428,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.8"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.9"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -692,7 +698,8 @@ async function openRoom(id) {
   $("#emptyOverlay").hidden = true;
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
   $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#miniTitle").textContent = ""; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
-  room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {} };
+  $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น";
+  room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false };
   const r = room;
   // ติดตามสถานะห้องและคิวตลอดเวลา ไม่ต้องรอกดเข้าร่วมก่อน (เพื่อให้เพิ่มคลิปเข้าคิวได้ทันที)
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/state`), s => onRemoteState(s.val())));
@@ -713,10 +720,19 @@ async function joinRoom() {
     if (s.val()) { set(pref, { name: me.displayName || me.username }).catch(() => { }); onDisconnect(pref).remove(); }
   }));
   r.unsubs.push(onValue(ref(rdb, `rooms/${r.id}/presence`), s => {
-    const list = Object.values(s.val() || {});
+    r.presence = s.val() || {};
+    const list = Object.values(r.presence);
     $("#seatCount").textContent = list.length;
     $("#seats").innerHTML = list.map(x => `<li><i style="background:${colorOf(x.name)}"></i>${esc(x.name)}</li>`).join("");
+    updateHostUI();
   }));
+  // หัวหน้าห้อง: บัญชีแรกที่เข้ามาในห้อง (ตอนห้องยังไม่มีใครถือสิทธิ์) จะได้สิทธิ์เล่น/หยุดคลิปแต่ผู้เดียว
+  const hostRef = ref(rdb, `rooms/${r.id}/host`);
+  try {
+    const res = await runTransaction(hostRef, cur => cur === null || cur === undefined ? me.uid : cur);
+    if (res.committed && res.snapshot.val() === me.uid) { r.hostRef = hostRef; onDisconnect(hostRef).remove(); }
+  } catch { }
+  r.unsubs.push(onValue(hostRef, s => { r.hostUid = s.val(); updateHostUI(); }));
   createPlayer(r.state);
   updateStageMode();
 }
@@ -730,7 +746,7 @@ function createPlayer(st) {
   $("#emptyOverlay").hidden = !!(st && st.videoId);
   r.player = new YT.Player("ytplayer", {
     width: "100%", height: "100%", videoId: st?.videoId || undefined,
-    playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+    playerVars: { playsinline: 1, rel: 0, modestbranding: 1, controls: 0, disablekb: 1 },
     events: {
       onReady: () => {
         r.ready = true; $("#joinOverlay").hidden = true; if (r.state?.videoId) applyState(r.state);
@@ -831,7 +847,21 @@ function renderNowPlaying() {
   const r = room, st = r?.state, title = st?.videoId ? (r.titles[st.videoId] || st.videoId) : null;
   $("#nowPlaying").textContent = title ? (st.playing ? `▶ ${title}` : `⏸ ${title}`) : "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย";
   $("#miniTitle").textContent = title || "";
+  const btn = $("#playPauseBtn");
+  btn.textContent = st?.playing ? "⏸ หยุด" : "▶ เล่น";
+  btn.disabled = !r?.isHost || !st?.videoId;
 }
+function updateHostUI() {
+  const r = room; if (!r) return;
+  r.isHost = !!(r.hostUid && me && r.hostUid === me.uid);
+  const hostName = r.hostUid ? (r.presence?.[r.hostUid]?.name || (r.hostUid === me?.uid ? (me.displayName || me.username) : "กำลังโหลด...")) : null;
+  $("#hostInfo").textContent = hostName ? (r.isHost ? "คุณเป็นหัวหน้าห้อง คุมเล่น/หยุดได้" : `หัวหน้าห้อง: ${hostName}`) : "ยังไม่มีหัวหน้าห้อง";
+  renderNowPlaying();
+}
+$("#playPauseBtn").addEventListener("click", () => {
+  const r = room; if (!r?.isHost || !r.player) return;
+  r.state?.playing ? r.player.pauseVideo() : r.player.playVideo();
+});
 function renderQueue() {
   const r = room, items = r.queueItems;
   $("#queueCount").textContent = items.length;
@@ -953,6 +983,7 @@ function closeStage() {
   clearInterval(r.watch); clearInterval(r.sync); clearTimeout(r.applyTimer);
   r.unsubs.forEach(u => { try { u(); } catch { } });
   if (r.pref) { onDisconnect(r.pref).cancel().catch(() => { }); remove(r.pref).catch(() => { }); }
+  if (r.hostRef) { onDisconnect(r.hostRef).cancel().catch(() => { }); remove(r.hostRef).catch(() => { }); }
   try { r.player?.destroy(); } catch { }
   $("#playerHolder").innerHTML = "";
   $("#stageDock").classList.remove("active", "mini");
