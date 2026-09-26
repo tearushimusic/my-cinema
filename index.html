@@ -123,7 +123,7 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .reactBar button{background:transparent;border:1px solid var(--line);border-radius:8px;font-size:1.15rem;width:2.1rem;height:2.1rem;cursor:pointer;line-height:1}
 .reactBar button:hover{background:var(--panel2)}
 .reactGridWrap{margin-top:.6rem}
-.reactGrid{display:grid;grid-template-columns:repeat(10,1fr);gap:.25rem;max-height:14rem;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:.6rem}
+.reactGrid{display:grid;grid-template-columns:repeat(10,1fr);gap:.25rem;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:.6rem}
 .reactGrid button{background:transparent;border:0;font-size:1.3rem;padding:.35rem 0;border-radius:8px;cursor:pointer;line-height:1}
 .reactGrid button:hover{background:var(--panel2)}
 @media (max-width:520px){.reactGrid{grid-template-columns:repeat(6,1fr)}}
@@ -500,7 +500,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.23"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.24"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
