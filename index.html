@@ -40,6 +40,21 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 #topbar a.nav:hover{background:var(--panel)}
 #userChip{color:var(--mute);font-size:.92rem}
 
+/* ดร็อปดาวน์โปรไฟล์ */
+.profileMenu{position:relative}
+.profileBtn{display:flex;align-items:center;gap:.5rem;background:transparent;border:1px solid var(--line);border-radius:999px;padding:.3rem .5rem .3rem .35rem;cursor:pointer}
+.profileBtn:hover{background:var(--panel)}
+.avatar{width:1.6rem;height:1.6rem;border-radius:50%;display:grid;place-items:center;font-size:.78rem;font-weight:700;color:var(--bg)}
+.chev{color:var(--mute);font-size:.7rem;transition:transform .15s ease}
+.profileBtn[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.profileDrop{position:absolute;right:0;top:calc(100% + .5rem);background:var(--panel2);border:1px solid var(--brass2);border-radius:12px;min-width:190px;box-shadow:0 16px 40px rgba(0,0,0,.5);overflow:hidden;z-index:30;
+  opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .14s ease,transform .14s ease}
+.profileDrop.show{opacity:1;transform:none;pointer-events:auto}
+.profileDrop button{display:block;width:100%;text-align:left;background:transparent;border:0;padding:.65rem .9rem;cursor:pointer;color:var(--ivory);font-size:.92rem}
+.profileDrop button:hover{background:var(--panel)}
+.profileDrop button.danger{color:var(--bad)}
+.profileDrop hr{border:0;border-top:1px solid var(--line);margin:0}
+
 /* ล็อกอิน: ม่านกำมะหยี่สองข้าง */
 body[data-view="login"]::before,body[data-view="login"]::after{
   content:"";position:fixed;top:0;bottom:0;width:min(16vw,170px);z-index:0;pointer-events:none;
@@ -96,9 +111,19 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1)}
 .logline{font-size:.88rem;padding:.35rem 0;border-top:1px solid var(--line);display:flex;gap:.6rem;flex-wrap:wrap}
 .logline time{color:var(--mute);min-width:150px}
 dialog{background:var(--panel);color:var(--ivory);border:1px solid var(--brass2);border-radius:14px;padding:1.3rem;width:min(420px,92vw)}
-dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog[open]{animation:dlgPop .16s cubic-bezier(.2,.8,.2,1)}
+dialog::backdrop{background:rgba(0,0,0,.6);animation:bgFade .16s ease}
+@keyframes dlgPop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes bgFade{from{opacity:0}to{opacity:1}}
 dialog .actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem}
-#toast{position:fixed;left:50%;bottom:1.2rem;transform:translateX(-50%);background:var(--brass);color:var(--bg);padding:.6rem 1.1rem;border-radius:10px;font-weight:600;z-index:50;max-width:90vw}
+dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
+.btn.danger.solid{background:#c0433f;color:#fff;border:0}
+#toast{position:fixed;left:50%;bottom:1.2rem;transform:translate(-50%,10px);background:var(--brass);color:var(--bg);padding:.6rem 1.1rem;border-radius:10px;font-weight:600;z-index:50;max-width:90vw;
+  display:flex;align-items:center;gap:.5rem;opacity:0;pointer-events:none;transition:opacity .2s ease,transform .2s ease;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.err{background:#c0433f;color:#fff}
+#toast .ic{font-size:1rem}
+#verTag{display:block;text-align:center;color:var(--mute);font-size:.8rem;margin:1.6rem 0 .4rem}
 @media (max-width:520px){
   .ticket{grid-template-columns:1fr 104px}.ticket::before,.ticket::after{right:95px}
   .wrap{padding:.9rem}
@@ -113,8 +138,17 @@ dialog .actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem}
   <nav>
     <a class="nav" href="#/">โรงหนัง</a>
     <a class="nav" id="navSettings" href="#/settings" hidden>ตั้งค่า</a>
-    <span id="userChip"></span>
-    <button class="btn ghost small" id="logoutBtn" type="button">ออกจากระบบ</button>
+    <div class="profileMenu">
+      <button class="profileBtn" id="profileBtn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span class="avatar" id="avatarDot"></span><span id="userChip"></span><span class="chev">▾</span>
+      </button>
+      <div class="profileDrop" id="profileDrop" role="menu">
+        <button role="menuitem" type="button" id="menuRename">เปลี่ยนชื่อที่แสดง</button>
+        <button role="menuitem" type="button" id="menuPassword">เปลี่ยนรหัสผ่าน</button>
+        <hr>
+        <button role="menuitem" type="button" id="menuLogout" class="danger">ออกจากระบบ</button>
+      </div>
+    </div>
   </nav>
 </header>
 
@@ -225,6 +259,7 @@ dialog .actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem}
         <div id="logList"></div>
       </div>
     </div>
+    <span id="verTag"></span>
   </div>
 </section>
 
@@ -235,15 +270,24 @@ dialog .actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem}
     <p class="err" id="dlgErr" role="alert"></p>
     <div class="actions">
       <button class="btn ghost" type="button" id="dlgCancel">ยกเลิก</button>
-      <button class="btn" type="submit">บันทึก</button>
+      <button class="btn" type="submit" id="dlgOk">บันทึก</button>
     </div>
   </form>
 </dialog>
-<div id="toast" hidden></div>
+<dialog id="confirmDlg">
+  <h3 id="confirmTitle"></h3>
+  <p class="msg" id="confirmMsg"></p>
+  <div class="actions">
+    <button class="btn ghost" type="button" id="confirmCancel">ยกเลิก</button>
+    <button class="btn danger solid" type="button" id="confirmOk">ยืนยัน</button>
+  </div>
+</dialog>
+<div id="toast" hidden><span class="ic"></span><span class="msgTxt"></span></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, orderBy, limit,
   where, onSnapshot, getDocs, writeBatch, serverTimestamp, Timestamp }
@@ -255,13 +299,13 @@ import { getDatabase, ref, set, remove, onValue, onDisconnect, serverTimestamp a
 const firebaseConfig = {
   apiKey: "AIzaSyDSvwtNbGM1gSgZsbM0sJjB-iaNjcju5ZQ",
   authDomain: "borkan-theatre.firebaseapp.com",
+  databaseURL: "https://borkan-theatre-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "borkan-theatre",
-  storageBucket: "borkan-theatre.firebasestorage.app",
-  messagingSenderId: "271531548460",
   appId: "1:271531548460:web:d2cb5690529f92f367d689"
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
+const APP_VERSION = "v0.1"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -278,16 +322,33 @@ const isAdmin = () => me && (me.role === "admin" || me.role === "super");
 const isSuper = () => me && me.role === "super";
 const canManage = a => isSuper() ? a.role !== "super" : (me?.role === "admin" && a.role === "member");
 
-let toastT;
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3500); }
+let toastT, toastHideT;
+function toast(msg, type = "ok") {
+  const t = $("#toast"); clearTimeout(toastT); clearTimeout(toastHideT);
+  t.className = type; t.querySelector(".ic").textContent = type === "err" ? "!" : "✓"; t.querySelector(".msgTxt").textContent = msg;
+  t.hidden = false; void t.offsetWidth; t.classList.add("show");
+  toastT = setTimeout(() => { t.classList.remove("show"); toastHideT = setTimeout(() => t.hidden = true, 220); }, 3500);
+}
 function explain(e) {
   const c = e?.code || "", m = e?.message || "";
   if (c.includes("permission-denied") || m.includes("PERMISSION_DENIED")) return "ไม่มีสิทธิ์ทำรายการนี้";
   if (c === "auth/email-already-in-use") return "username นี้มีอยู่ในระบบ Auth แล้ว";
   if (c === "auth/weak-password") return "รหัสผ่านสั้นเกินไป (อย่างน้อย 6 ตัว)";
   if (c === "auth/too-many-requests") return "ลองบ่อยเกินไป รอสักครู่แล้วลองใหม่";
+  if (c === "auth/wrong-password" || c === "auth/invalid-credential") return "รหัสผ่านเดิมไม่ถูกต้อง";
   return m || "เกิดข้อผิดพลาด";
 }
+const confirmDlgEl = $("#confirmDlg"); let confirmResolve = null;
+function askConfirm(title, msg, opts = {}) {
+  $("#confirmTitle").textContent = title; $("#confirmMsg").textContent = msg;
+  const ok = $("#confirmOk"); ok.textContent = opts.okLabel || "ยืนยัน";
+  ok.className = "btn" + (opts.danger === false ? "" : " danger solid");
+  confirmDlgEl.showModal();
+  return new Promise(res => { confirmResolve = res; });
+}
+$("#confirmOk").addEventListener("click", () => { confirmDlgEl.close(); confirmResolve?.(true); });
+$("#confirmCancel").addEventListener("click", () => { confirmDlgEl.close(); confirmResolve?.(false); });
+confirmDlgEl.addEventListener("cancel", () => confirmResolve?.(false));
 async function logEvent(action, detail = "") {
   try { await addDoc(collection(db, "logs"), { ts: serverTimestamp(), actor: me.username, action, detail: String(detail).slice(0, 300) }); } catch { }
 }
@@ -305,7 +366,11 @@ async function loadSite() { try { const s = await getDoc(doc(db, "settings", "si
 function show(v) { for (const n of ["login", "hub", "room", "settings"]) $("#view-" + n).hidden = n !== v; document.body.dataset.view = v; }
 function renderChrome() {
   $("#topbar").hidden = !me;
-  if (me) { $("#userChip").textContent = me.displayName || me.username; $("#navSettings").hidden = !isAdmin(); }
+  if (me) {
+    $("#userChip").textContent = me.displayName || me.username; $("#navSettings").hidden = !isAdmin();
+    const dot = $("#avatarDot"), n = me.displayName || me.username;
+    dot.textContent = n.trim().slice(0, 1).toUpperCase(); dot.style.background = colorOf(me.username);
+  }
 }
 function route() {
   leaveRoom(); if (hubUnsub) { hubUnsub(); hubUnsub = null; }
@@ -330,7 +395,44 @@ $("#loginForm").addEventListener("submit", async e => {
     await signInWithEmailAndPassword(auth, un.data().authEmail, p);
   } catch (ex) { pendingLoginLog = false; err(ex.code === "auth/too-many-requests" ? explain(ex) : "username หรือรหัสผ่านไม่ถูกต้อง"); }
 });
-$("#logoutBtn").addEventListener("click", () => signOut(auth));
+/* ---------- ดร็อปดาวน์โปรไฟล์ ---------- */
+const profileBtn = $("#profileBtn"), profileDrop = $("#profileDrop");
+function closeProfileMenu() { profileDrop.classList.remove("show"); profileBtn.setAttribute("aria-expanded", "false"); }
+profileBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  const open = profileDrop.classList.toggle("show");
+  profileBtn.setAttribute("aria-expanded", String(open));
+});
+document.addEventListener("click", e => { if (!e.target.closest(".profileMenu")) closeProfileMenu(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeProfileMenu(); });
+
+$("#menuLogout").addEventListener("click", () => { closeProfileMenu(); signOut(auth); });
+
+$("#menuRename").addEventListener("click", () => {
+  closeProfileMenu();
+  askDialog("เปลี่ยนชื่อที่แสดง", `<label>ชื่อที่แสดง</label><input name="displayName" maxlength="40" value="${esc(me.displayName)}" required>`, async f => {
+    const name = f.get("displayName").trim(); if (!name) throw new Error("กรอกชื่อที่แสดง");
+    await updateDoc(doc(db, "accounts", me.uid), { displayName: name });
+    me.displayName = name; renderChrome(); toast("เปลี่ยนชื่อแล้ว");
+  });
+});
+
+$("#menuPassword").addEventListener("click", () => {
+  closeProfileMenu();
+  askDialog("เปลี่ยนรหัสผ่าน", `
+    <label>รหัสผ่านเดิม</label><input name="old" type="password" autocomplete="current-password" required>
+    <label>รหัสผ่านใหม่ (6 ตัวขึ้นไป)</label><input name="new1" type="password" autocomplete="new-password" minlength="6" required>
+    <label>ยืนยันรหัสผ่านใหม่</label><input name="new2" type="password" autocomplete="new-password" minlength="6" required>`,
+    async f => {
+      const oldPw = f.get("old"), p1 = f.get("new1"), p2 = f.get("new2");
+      if (p1.length < 6) throw new Error("รหัสผ่านใหม่อย่างน้อย 6 ตัว");
+      if (p1 !== p2) throw new Error("รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน");
+      const cred = EmailAuthProvider.credential(auth.currentUser.email, oldPw);
+      await reauthenticateWithCredential(auth.currentUser, cred);
+      await updatePassword(auth.currentUser, p1);
+      logEvent("password_self_change"); toast("เปลี่ยนรหัสผ่านแล้ว");
+    });
+});
 
 onAuthStateChanged(auth, async user => {
   if (!user) { me = null; renderChrome(); return route(); }
@@ -359,20 +461,21 @@ function openHub() {
         <div class="stub"><a class="btn" href="#/room/${encodeURIComponent(d.id)}">เข้าโรง</a>
         ${isAdmin() ? `<button class="btn danger small" data-del="${esc(d.id)}" data-name="${esc(c.name)}" type="button">ลบโรง</button>` : ""}</div></div>`;
     }).join("");
-  }, ex => toast(explain(ex)));
+  }, ex => toast(explain(ex), "err"));
 }
 $("#cinemaForm").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("#cName").value.trim(), desc = $("#cDesc").value.trim();
   if (!name) return;
   try { await addDoc(collection(db, "cinemas"), { name, desc, createdBy: me.username, createdAt: serverTimestamp() }); logEvent("cinema_add", name); e.target.reset(); }
-  catch (ex) { toast(explain(ex)); }
+  catch (ex) { toast(explain(ex), "err"); }
 });
 $("#ticketList").addEventListener("click", async e => {
   const b = e.target.closest("[data-del]"); if (!b) return;
-  if (!confirm(`ลบโรง "${b.dataset.name}" ?`)) return;
-  try { await deleteDoc(doc(db, "cinemas", b.dataset.del)); remove(ref(rdb, `rooms/${b.dataset.del}`)).catch(() => { }); logEvent("cinema_delete", b.dataset.name); }
-  catch (ex) { toast(explain(ex)); }
+  const ok = await askConfirm("ลบโรงหนัง", `ลบ "${b.dataset.name}" ? ประวัติการดูในห้องนี้จะหายไปด้วย`, { okLabel: "ลบโรง" });
+  if (!ok) return;
+  try { await deleteDoc(doc(db, "cinemas", b.dataset.del)); remove(ref(rdb, `rooms/${b.dataset.del}`)).catch(() => { }); logEvent("cinema_delete", b.dataset.name); toast("ลบโรงแล้ว"); }
+  catch (ex) { toast(explain(ex), "err"); }
 });
 
 /* ---------- โรงหนัง (ซิงก์วิดีโอ) ---------- */
@@ -394,7 +497,7 @@ function parseYouTubeId(input) {
 async function openRoom(id) {
   show("room");
   $("#roomTitle").textContent = "";
-  let c; try { c = await getDoc(doc(db, "cinemas", id)); } catch (ex) { toast(explain(ex)); location.hash = "#/"; return; }
+  let c; try { c = await getDoc(doc(db, "cinemas", id)); } catch (ex) { toast(explain(ex), "err"); location.hash = "#/"; return; }
   if (!c.exists()) { toast("ไม่พบโรงหนังนี้"); location.hash = "#/"; return; }
   $("#roomTitle").textContent = c.data().name;
   $("#joinOverlay").hidden = false; $("#emptyOverlay").hidden = true;
@@ -438,7 +541,7 @@ function createPlayer(st) {
     events: {
       onReady: () => { r.ready = true; if (r.state?.videoId) applyState(r.state); },
       onStateChange: onPlayerState,
-      onError: e => toast([101, 150].includes(e.data) ? "คลิปนี้เจ้าของไม่อนุญาตให้ฝัง เลือกคลิปอื่น" : "เล่นคลิปนี้ไม่ได้ (รหัส " + e.data + ")")
+      onError: e => toast([101, 150].includes(e.data) ? "คลิปนี้เจ้าของไม่อนุญาตให้ฝัง เลือกคลิปอื่น" : "เล่นคลิปนี้ไม่ได้ (รหัส " + e.data + ")", "err")
     }
   });
   // ตรวจจับการเลื่อนเวลาเอง + ปรับเวลาให้ตรงเป็นระยะ
@@ -507,13 +610,13 @@ function publish(patch) {
     time: patch.time ?? (p?.getCurrentTime ? p.getCurrentTime() : 0),
     updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username
   };
-  set(ref(rdb, `rooms/${r.id}/state`), next).catch(ex => toast(explain(ex)));
+  set(ref(rdb, `rooms/${r.id}/state`), next).catch(ex => toast(explain(ex), "err"));
 }
 $("#videoForm").addEventListener("submit", e => {
   e.preventDefault();
-  if (!room?.joined) return toast("กด \"เข้าร่วมดูพร้อมกัน\" ก่อน");
+  if (!room?.joined) return toast("กด \"เข้าร่วมดูพร้อมกัน\" ก่อน", "err");
   const id = parseYouTubeId($("#vUrl").value);
-  if (!id) return toast("ลิงก์ YouTube ไม่ถูกต้อง");
+  if (!id) return toast("ลิงก์ YouTube ไม่ถูกต้อง", "err");
   publish({ videoId: id, playing: true, time: 0 }); $("#vUrl").value = "";
 });
 $("#syncBtn").addEventListener("click", () => { if (room?.state) { applyState(room.state); toast("ซิงก์ตามห้องแล้ว"); } });
@@ -530,6 +633,7 @@ function leaveRoom() {
 /* ---------- ตั้งค่า ---------- */
 function openSettings() {
   show("settings");
+  $("#verTag").textContent = "เวอร์ชัน " + APP_VERSION;
   $("#aRoleWrap").hidden = !isSuper();
   $("#tabLogsBtn").hidden = !isSuper();
   $("#brandRow").hidden = !isSuper(); $("#brandNote").hidden = isSuper();
@@ -548,7 +652,7 @@ async function loadAccounts() {
   try {
     const snap = await getDocs(collection(db, "accounts"));
     accCache = snap.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => a.username.localeCompare(b.username));
-  } catch (ex) { return toast(explain(ex)); }
+  } catch (ex) { return toast(explain(ex), "err"); }
   $("#accList").innerHTML = accCache.map(a => `
     <div class="acc"><div class="who"><b>${esc(a.displayName)} <span class="tag">${roleLabel(a.role)}</span>${a.status !== "active" ? '<span class="tag off">ระงับ</span>' : ""}</b>
       <span class="muted">${esc(a.username)}</span></div>
@@ -615,14 +719,15 @@ $("#accList").addEventListener("click", e => {
       logEvent("password_reset", acc.username); toast("ตั้งรหัสผ่านใหม่แล้ว"); loadAccounts();
     });
   } else if (b.dataset.act === "del") {
-    if (!confirm(`ลบบัญชี ${acc.username} ถาวร ?`)) return;
     (async () => {
+      const ok = await askConfirm("ลบบัญชี", `ลบบัญชี "${acc.username}" ถาวร ? เข้าระบบไม่ได้อีก`, { okLabel: "ลบบัญชี" });
+      if (!ok) return;
       try {
         const bt = writeBatch(db);
         bt.delete(doc(db, "accounts", acc.uid)); bt.delete(doc(db, "usernames", acc.username));
         await bt.commit(); await setRole(acc.uid, null);
         logEvent("account_delete", acc.username); toast("ลบบัญชีแล้ว"); loadAccounts();
-      } catch (ex) { toast(explain(ex)); }
+      } catch (ex) { toast(explain(ex), "err"); }
     })();
   }
 });
@@ -632,7 +737,7 @@ $("#siteNameForm").addEventListener("submit", async e => {
   e.preventDefault();
   const v = $("#siteNameInput").value.trim().slice(0, 40); if (!v) return;
   try { await setDoc(doc(db, "settings", "site"), { siteName: v }, { merge: true }); site.siteName = v; applySite(); logEvent("site_name", v); toast("บันทึกชื่อเว็บแล้ว"); }
-  catch (ex) { toast(explain(ex)); }
+  catch (ex) { toast(explain(ex), "err"); }
 });
 function resizeImage(file, max) {
   return new Promise((res, rej) => {
@@ -653,7 +758,7 @@ async function uploadBrand(kind, file) {
     if (data.length > 350000) throw new Error("รูปใหญ่เกินไป ลองรูปที่เรียบง่ายกว่านี้");
     await setDoc(doc(db, "settings", "site"), { [kind]: data }, { merge: true });
     site[kind] = data; applySite(); logEvent(kind + "_update"); toast("อัปโหลดแล้ว");
-  } catch (ex) { toast(explain(ex)); }
+  } catch (ex) { toast(explain(ex), "err"); }
 }
 $("#logoFile").addEventListener("change", e => uploadBrand("logo", e.target.files[0]));
 $("#iconFile").addEventListener("change", e => uploadBrand("icon", e.target.files[0]));
@@ -667,17 +772,18 @@ async function loadLogs() {
       const l = d.data(), t = l.ts?.toDate ? l.ts.toDate().toLocaleString("th-TH") : "";
       return `<div class="logline"><time>${esc(t)}</time><b>${esc(l.actor)}</b><span>${esc(l.action)}</span><span class="muted">${esc(l.detail)}</span></div>`;
     }).join("");
-  } catch (ex) { toast(explain(ex)); }
+  } catch (ex) { toast(explain(ex), "err"); }
 }
 $("#logsRefresh").addEventListener("click", loadLogs);
 $("#logsClear").addEventListener("click", async () => {
-  if (!confirm("ลบรายการที่เก่ากว่า 30 วัน ?")) return;
+  const ok = await askConfirm("ลบประวัติเก่า", "ลบรายการที่เก่ากว่า 30 วัน ?", { okLabel: "ลบรายการ" });
+  if (!ok) return;
   try {
     const cutoff = Timestamp.fromMillis(Date.now() - 30 * 86400000);
     const snap = await getDocs(query(collection(db, "logs"), where("ts", "<", cutoff), limit(400)));
     const b = writeBatch(db); snap.docs.forEach(d => b.delete(d.ref)); await b.commit();
     toast(`ลบแล้ว ${snap.size} รายการ`); loadLogs();
-  } catch (ex) { toast(explain(ex)); }
+  } catch (ex) { toast(explain(ex), "err"); }
 });
 
 loadSite();
