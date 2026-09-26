@@ -333,7 +333,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.3"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.4"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -791,7 +791,12 @@ async function loadAccounts() {
         <button class="btn ghost small" data-act="reset" data-uid="${esc(a.uid)}" type="button">รีเซ็ตรหัส</button>
         <button class="btn danger small" data-act="del" data-uid="${esc(a.uid)}" type="button">ลบ</button>` : '<span class="muted">จัดการไม่ได้</span>'}</div></div>`).join("");
 }
-const setRole = (uid, role) => role ? set(ref(rdb, "roles/" + uid), role) : remove(ref(rdb, "roles/" + uid));
+async function setRole(uid, role) {
+  // เขียนสิทธิ์ไปยัง Realtime Database (ใช้เฉพาะฟีเจอร์ห้องดูหนัง) แยกจากผลลัพธ์หลักที่ Firestore
+  // เพื่อไม่ให้ความล้มเหลวตรงนี้บังข้อความสำเร็จของการจัดการบัญชี
+  try { await (role ? set(ref(rdb, "roles/" + uid), role) : remove(ref(rdb, "roles/" + uid))); }
+  catch (ex) { toast("บันทึกบัญชีสำเร็จ แต่ซิงก์สิทธิ์ห้องดูหนังไม่สำเร็จ: " + explain(ex), "err"); }
+}
 async function createAuthUser(email, pw) { const c = await createUserWithEmailAndPassword(auth2, email, pw); await signOut(auth2); return c.user.uid; }
 
 $("#addAccBtn").addEventListener("click", () => {
