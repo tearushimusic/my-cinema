@@ -9,22 +9,22 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.youtube.com">
 <link rel="preconnect" href="https://www.gstatic.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#100f18; --bg2:#171526; --panel:#1c1a28; --panel2:#242235; --line:#322f45;
-  --accent:#4fd1c5; --accent2:#9b8cff; --ivory:#f1eefc; --mute:#a29cc2; --ok:#7fe37a; --bad:#ff6b81;
+  --bg:#131314; --bg2:#1a1a1b; --panel:#1e1f20; --panel2:#28292a; --line:#3c4043;
+  --accent:#8ab4f8; --accent2:#2b3140; --ivory:#e3e3e3; --mute:#9aa0a6; --ok:#81c995; --bad:#f28b82;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ivory);font:16px/1.6 'Noto Sans Thai','Noto Sans',system-ui,sans-serif;min-height:100vh}
-h1,h2,h3,.brand{font-family:'Noto Sans Thai','Noto Sans',sans-serif;font-weight:600;margin:0}
+body{background:var(--bg);color:var(--ivory);font:16px/1.6 'Noto Sans Thai','Roboto',system-ui,sans-serif;min-height:100vh}
+h1,h2,h3,.brand{font-family:'Noto Sans Thai','Roboto',sans-serif;font-weight:500;margin:0}
 [hidden]{display:none!important}
 button,input,select{font:inherit;color:inherit}
-input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.6rem .75rem;width:100%}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:.6rem .75rem;width:100%}
 label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn{background:var(--accent);color:var(--bg);border:0;border-radius:8px;padding:.55rem 1rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s ease,opacity .15s ease,transform .1s ease}
+.btn{background:var(--accent);color:var(--bg);border:0;border-radius:999px;padding:.55rem 1.15rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s ease,opacity .15s ease,transform .1s ease}
 .btn:active{transform:scale(.97)}
 .btn.ghost{background:transparent;color:var(--ivory);border:1px solid var(--line)}
 .btn.danger{background:transparent;color:var(--bad);border:1px solid #8a3d3d}
@@ -70,19 +70,13 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .profileDrop button.danger{color:var(--bad)}
 .profileDrop hr{border:0;border-top:1px solid var(--line);margin:0}
 
-/* ล็อกอิน: แสงฟุ้งโทนมืดทันสมัย */
-body[data-view="login"]::before,body[data-view="login"]::after{
-  content:"";position:fixed;width:46vw;max-width:560px;aspect-ratio:1;border-radius:50%;z-index:0;pointer-events:none;
-  filter:blur(90px);opacity:.35;animation:glowIn .8s ease}
-body[data-view="login"]::before{top:-14vw;left:-10vw;background:var(--accent)}
-body[data-view="login"]::after{bottom:-16vw;right:-10vw;background:var(--accent2)}
-@keyframes glowIn{from{opacity:0;transform:scale(.85)}to{opacity:.35;transform:scale(1)}}
+/* ล็อกอิน: เรียบสไตล์ Google ไม่มีแสงฟุ้ง */
 #view-login:not([hidden]),#view-hub:not([hidden]),#view-room:not([hidden]),#view-settings:not([hidden]){animation:viewFade .25s ease}
 @keyframes viewFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 #view-login{position:relative;z-index:1;min-height:100vh;display:grid;place-items:center;padding:1.2rem}
-.login-card{position:relative;z-index:1;width:min(400px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:1.8rem 1.6rem;box-shadow:0 24px 70px rgba(0,0,0,.45)}
+.login-card{position:relative;z-index:1;width:min(400px,100%);background:var(--panel);border-radius:24px;padding:2rem 1.8rem;box-shadow:0 1px 3px rgba(0,0,0,.4),0 12px 40px rgba(0,0,0,.35)}
 .login-card .logo{display:block;max-height:72px;margin:0 auto .8rem}
-.login-card h1{text-align:center;font-size:1.7rem;color:var(--ivory)}
+.login-card h1{text-align:center;font-size:1.7rem;font-weight:400;color:var(--ivory)}
 .login-card p.sub{text-align:center;margin:.3rem 0 1rem}
 .login-card .btn{width:100%;margin-top:1rem;padding:.75rem}
 .pwWrap{position:relative}
@@ -103,7 +97,7 @@ body[data-view="login"]::after{bottom:-16vw;right:-10vw;background:var(--accent2
 .ticket .stub{display:flex;gap:.6rem;align-items:center;margin-top:.2rem}
 .ticket .stub a.btn{text-decoration:none;text-align:center;flex:1}
 .empty{border:2px dashed var(--line);border-radius:12px;padding:2rem;text-align:center;color:var(--mute)}
-.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1rem 1.2rem;margin-bottom:1rem}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:1.1rem 1.3rem;margin-bottom:1rem}
 .row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:end}
 .row>*{flex:1 1 160px}
 .row>.btn{flex:0 0 auto}
@@ -139,7 +133,7 @@ body[data-view="login"]::after{bottom:-16vw;right:-10vw;background:var(--accent2
 @media (min-width:900px){.roomGrid{grid-template-columns:1fr 340px;align-items:start}}
 #view-room .wrap{max-width:min(1700px,97vw)}
 .roomSide{display:flex;flex-direction:column;gap:1rem}
-.sideBox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem}
+.sideBox{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:1.1rem 1.2rem}
 .sideBox h3{margin-bottom:.6rem}
 .sideBox form,.sideBox>div{display:flex;flex-direction:column;gap:.5rem}
 .sideBox .btn{margin-top:.2rem}
@@ -193,7 +187,7 @@ body[data-view="login"]::after{bottom:-16vw;right:-10vw;background:var(--accent2
 .acc .acts{display:flex;gap:.4rem;flex-wrap:wrap}
 .logline{font-size:.88rem;padding:.35rem 0;border-top:1px solid var(--line);display:flex;gap:.6rem;flex-wrap:wrap}
 .logline time{color:var(--mute);min-width:150px}
-dialog{background:var(--panel);color:var(--ivory);border:1px solid var(--accent2);border-radius:14px;padding:1.3rem;width:min(420px,92vw)}
+dialog{background:var(--panel);color:var(--ivory);border:1px solid var(--line);border-radius:24px;padding:1.4rem;width:min(420px,92vw)}
 dialog[open]{animation:dlgPop .16s cubic-bezier(.2,.8,.2,1)}
 dialog::backdrop{background:rgba(0,0,0,.6);animation:bgFade .16s ease}
 @keyframes dlgPop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
@@ -464,7 +458,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.17"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.18"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
