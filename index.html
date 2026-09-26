@@ -96,6 +96,19 @@ body[data-view="login"]::after{right:0;transform:scaleX(-1)}
 .seats li{display:flex;align-items:center;gap:.45rem;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:.2rem .8rem .2rem .5rem;font-size:.92rem}
 .seats i{width:.8rem;height:.8rem;border-radius:50%}
 #lastAction{min-height:1.5em;font-size:.92rem}
+.queue{list-style:none;margin:.4rem 0 0;padding:0;display:grid;gap:.5rem}
+.queue li{display:flex;align-items:center;gap:.6rem;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem}
+.queue .num{color:var(--mute);font-size:.85rem;width:1.4rem;text-align:center;flex:0 0 auto}
+.queue .info{flex:1 1 auto;min-width:0}
+.queue .info b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.queue .info span{font-size:.82rem;color:var(--mute)}
+.queue .qacts{display:flex;gap:.3rem;flex:0 0 auto}
+.queue .qacts button{background:transparent;border:1px solid var(--line);color:var(--ivory);border-radius:6px;width:2rem;height:2rem;cursor:pointer;font-size:.9rem;line-height:1}
+.queue .qacts button:hover{background:var(--panel2)}
+.queue .qacts button:disabled{opacity:.35;cursor:not-allowed}
+.queue .qacts button.play{border-color:var(--brass2);color:var(--brass)}
+.queue .qacts button.del{border-color:#8a3d3d;color:var(--bad)}
+.emptyq{color:var(--mute);font-size:.9rem;padding:.4rem 0}
 
 /* ตั้งค่า */
 .tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem}
@@ -199,11 +212,15 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
     <div class="roomtools">
       <form class="row" id="videoForm">
         <div><label for="vUrl">ลิงก์ YouTube</label><input id="vUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
-        <button class="btn" type="submit">เปลี่ยนคลิป</button>
+        <button class="btn" type="submit">เพิ่มเข้าคิว</button>
         <button class="btn ghost" id="syncBtn" type="button">ซิงก์ฉัน</button>
         <button class="btn ghost" id="fsBtn" type="button">เต็มจอ</button>
       </form>
       <p id="lastAction" class="muted"></p>
+      <h3>กำลังฉาย</h3>
+      <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
+      <h3>คิวถัดไป (<span id="queueCount">0</span>)</h3>
+      <ol class="queue" id="queueList"></ol>
       <h3>ที่นั่ง (<span id="seatCount">0</span> คน)</h3>
       <ul class="seats" id="seats"></ul>
     </div>
@@ -292,7 +309,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, orderBy, limit,
   where, onSnapshot, getDocs, writeBatch, serverTimestamp, Timestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getDatabase, ref, set, remove, onValue, onDisconnect, serverTimestamp as rtdbTs }
+import { getDatabase, ref, set, remove, onValue, onDisconnect, push, update, runTransaction, serverTimestamp as rtdbTs }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 /* ========== 1) ใส่ค่า config จาก Firebase Console ตรงนี้ ========== */
@@ -305,7 +322,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.1"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.2"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -502,7 +519,12 @@ async function openRoom(id) {
   $("#roomTitle").textContent = c.data().name;
   $("#joinOverlay").hidden = false; $("#emptyOverlay").hidden = true;
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
-  room = { id, unsubs: [], player: null, ready: false, state: null, offset: 0, applying: false, joined: false, pos: null };
+  $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
+  room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {} };
+  const r = room;
+  // ติดตามสถานะห้องและคิวตลอดเวลา ไม่ต้องรอกดเข้าร่วมก่อน (เพื่อให้เพิ่มคลิปเข้าคิวได้ทันที)
+  r.unsubs.push(onValue(ref(rdb, `rooms/${id}/state`), s => onRemoteState(s.val())));
+  r.unsubs.push(onValue(ref(rdb, `rooms/${id}/queue`), s => onQueueUpdate(s.val())));
 }
 $("#joinBtn").addEventListener("click", joinRoom);
 
@@ -521,11 +543,7 @@ async function joinRoom() {
     $("#seatCount").textContent = list.length;
     $("#seats").innerHTML = list.map(x => `<li><i style="background:${colorOf(x.name)}"></i>${esc(x.name)}</li>`).join("");
   }));
-  const first = await new Promise(res => onValue(ref(rdb, `rooms/${r.id}/state`), s => res(s.val()), { onlyOnce: true }));
-  if (room !== r) return;
-  r.state = first;
-  createPlayer(first);
-  r.unsubs.push(onValue(ref(rdb, `rooms/${r.id}/state`), s => onRemoteState(s.val())));
+  createPlayer(r.state);
 }
 
 function serverNow() { return Date.now() + (room?.offset || 0); }
@@ -586,21 +604,26 @@ function softSync() {
   if (Math.abs(p.getCurrentTime() - targetTime(r.state)) > 2) { markApplying(); p.seekTo(targetTime(r.state), true); }
 }
 function onRemoteState(st) {
-  const r = room; if (!r || !st) return;
-  const prev = r.state; r.state = st;
-  $("#emptyOverlay").hidden = !!st.videoId;
-  if (st.by && st.by !== me.username) {
+  const r = room; if (!r) return;
+  const prev = r.state; r.state = st || null;
+  renderNowPlaying();
+  if (st?.videoId && !r.titles[st.videoId]) {
+    fetchTitle(st.videoId).then(t => { if (t) { r.titles[st.videoId] = t; renderNowPlaying(); } });
+  }
+  if (!r.joined) return; // ยังไม่เข้าร่วม แค่เก็บสถานะไว้ ไม่ต้องยุ่งกับผู้เล่นวิดีโอ
+  $("#emptyOverlay").hidden = !!st?.videoId;
+  if (st?.by && st.by !== me.username) {
     const what = !prev || prev.videoId !== st.videoId ? "เปลี่ยนคลิป" : prev.playing !== st.playing ? (st.playing ? "กดเล่น" : "กดหยุด") : "เลื่อนเวลา";
     $("#lastAction").textContent = `${st.byName || st.by}: ${what}`;
   }
-  applyState(st);
+  if (st) applyState(st);
 }
 function onPlayerState(e) {
   const r = room; if (!r || r.applying) return;
   const S = YT.PlayerState, playingNow = !!r.state?.playing;
   if (e.data === S.PLAYING && !playingNow) publish({ playing: true });
   else if (e.data === S.PAUSED && playingNow) publish({ playing: false });
-  else if (e.data === S.ENDED && playingNow) publish({ playing: false });
+  else if (e.data === S.ENDED && playingNow) advanceQueue(r.state?.videoId);
 }
 function publish(patch) {
   const r = room, p = r?.player, cur = r?.state || {};
@@ -612,15 +635,101 @@ function publish(patch) {
   };
   set(ref(rdb, `rooms/${r.id}/state`), next).catch(ex => toast(explain(ex), "err"));
 }
-$("#videoForm").addEventListener("submit", e => {
+
+/* ---------- คิวเพลย์ลิสต์ ---------- */
+async function fetchTitle(videoId) {
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent("https://www.youtube.com/watch?v=" + videoId)}`);
+    if (!res.ok) throw 0;
+    return (await res.json()).title || null;
+  } catch { return null; }
+}
+function nextOrder() { const r = room; return (r.queueItems.length ? Math.max(...r.queueItems.map(i => i.order)) : 0) + 1; }
+function renderNowPlaying() {
+  const r = room, st = r?.state, title = st?.videoId ? (r.titles[st.videoId] || st.videoId) : null;
+  $("#nowPlaying").textContent = title ? (st.playing ? `▶ ${title}` : `⏸ ${title}`) : "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย";
+}
+function renderQueue() {
+  const r = room, items = r.queueItems;
+  $("#queueCount").textContent = items.length;
+  $("#queueList").innerHTML = items.length ? items.map((it, i) => `
+    <li data-key="${esc(it.key)}">
+      <span class="num">${i + 1}</span>
+      <div class="info"><b>${esc(it.title || it.videoId)}</b><span>เพิ่มโดย ${esc(it.addedBy)}</span></div>
+      <div class="qacts">
+        <button data-act="up" ${i === 0 ? "disabled" : ""} title="เลื่อนขึ้น" type="button">↑</button>
+        <button data-act="down" ${i === items.length - 1 ? "disabled" : ""} title="เลื่อนลง" type="button">↓</button>
+        <button data-act="play" class="play" title="เล่นตอนนี้" type="button">▶</button>
+        <button data-act="del" class="del" title="ลบออกจากคิว" type="button">✕</button>
+      </div>
+    </li>`).join("") : '<li class="emptyq" style="border:0;background:none;padding:.2rem 0">ยังไม่มีคลิปในคิว</li>';
+}
+function onQueueUpdate(val) {
+  const r = room; if (!r) return;
+  r.queueItems = Object.entries(val || {}).map(([key, v]) => ({ key, ...v })).sort((a, b) => a.order - b.order);
+  renderQueue(); renderNowPlaying();
+  for (const it of r.queueItems) if (!it.title && !r.titles[it.videoId]) {
+    fetchTitle(it.videoId).then(t => { if (t) { r.titles[it.videoId] = t; update(ref(rdb, `rooms/${r.id}/queue/${it.key}`), { title: t }).catch(() => { }); renderNowPlaying(); } });
+  } else if (it.title) r.titles[it.videoId] = it.title;
+}
+function playQueueItem(key, item) {
+  const r = room;
+  set(ref(rdb, `rooms/${r.id}/state`), { videoId: item.videoId, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username })
+    .then(() => remove(ref(rdb, `rooms/${r.id}/queue/${key}`)))
+    .catch(ex => toast(explain(ex), "err"));
+}
+async function advanceQueue(endedVideoId) {
+  const r = room; if (!r) return;
+  const next = r.queueItems[0]; if (!next) { publish({ playing: false }); return; }
+  try {
+    const res = await runTransaction(ref(rdb, `rooms/${r.id}/state`), cur => {
+      if (!cur || cur.videoId !== endedVideoId) return cur; // มีคนอื่นจัดการไปแล้ว
+      return { videoId: next.videoId, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username };
+    });
+    if (res.committed && res.snapshot.val()?.videoId === next.videoId) remove(ref(rdb, `rooms/${r.id}/queue/${next.key}`)).catch(() => { });
+  } catch (ex) { toast(explain(ex), "err"); }
+}
+$("#videoForm").addEventListener("submit", async e => {
   e.preventDefault();
-  if (!room?.joined) return toast("กด \"เข้าร่วมดูพร้อมกัน\" ก่อน", "err");
+  const r = room; if (!r) return;
   const id = parseYouTubeId($("#vUrl").value);
   if (!id) return toast("ลิงก์ YouTube ไม่ถูกต้อง", "err");
-  publish({ videoId: id, playing: true, time: 0 }); $("#vUrl").value = "";
+  $("#vUrl").value = "";
+  try {
+    if (!r.state?.videoId && !r.queueItems.length) {
+      await set(ref(rdb, `rooms/${r.id}/state`), { videoId: id, playing: true, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username });
+      toast("เริ่มฉายเลย");
+    } else {
+      const it = push(ref(rdb, `rooms/${r.id}/queue`));
+      await set(it, { videoId: id, addedBy: me.displayName || me.username, order: nextOrder() });
+      toast("เพิ่มเข้าคิวแล้ว");
+    }
+  } catch (ex) { toast(explain(ex), "err"); }
 });
-$("#syncBtn").addEventListener("click", () => { if (room?.state) { applyState(room.state); toast("ซิงก์ตามห้องแล้ว"); } });
-$("#fsBtn").addEventListener("click", () => document.querySelector(".stage").requestFullscreen?.());
+$("#queueList").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const r = room, li = b.closest("li"), key = li.dataset.key, idx = r.queueItems.findIndex(x => x.key === key), item = r.queueItems[idx];
+  if (!item) return;
+  try {
+    if (b.dataset.act === "play") playQueueItem(item.key, item);
+    else if (b.dataset.act === "del") await remove(ref(rdb, `rooms/${r.id}/queue/${key}`));
+    else if (b.dataset.act === "up" && idx > 0) {
+      const other = r.queueItems[idx - 1];
+      await update(ref(rdb), { [`rooms/${r.id}/queue/${item.key}/order`]: other.order, [`rooms/${r.id}/queue/${other.key}/order`]: item.order });
+    } else if (b.dataset.act === "down" && idx < r.queueItems.length - 1) {
+      const other = r.queueItems[idx + 1];
+      await update(ref(rdb), { [`rooms/${r.id}/queue/${item.key}/order`]: other.order, [`rooms/${r.id}/queue/${other.key}/order`]: item.order });
+    }
+  } catch (ex) { toast(explain(ex), "err"); }
+});
+$("#syncBtn").addEventListener("click", () => {
+  if (!room?.joined) return toast("กด \"เข้าร่วมดูพร้อมกัน\" ก่อน", "err");
+  if (room?.state) { applyState(room.state); toast("ซิงก์ตามห้องแล้ว"); }
+});
+$("#fsBtn").addEventListener("click", () => {
+  if (!room?.joined) return toast("กด \"เข้าร่วมดูพร้อมกัน\" ก่อน", "err");
+  document.querySelector(".stage").requestFullscreen?.();
+});
 function leaveRoom() {
   const r = room; if (!r) return; room = null;
   clearInterval(r.watch); clearInterval(r.sync); clearTimeout(r.applyTimer);
