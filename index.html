@@ -119,13 +119,12 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .miniBar button{background:transparent;border:0;color:#fff;cursor:pointer;font-size:.95rem;padding:.15rem .35rem;line-height:1}
 .miniBar button:hover{background:rgba(255,255,255,.15);border-radius:4px}
 #stageDock.mini #joinOverlay,#stageDock.mini #emptyOverlay{display:none}
-.reactDock{position:absolute;right:.6rem;bottom:.6rem;z-index:4}
-#stageDock.mini .reactDock{display:none}
-#reactToggle{width:2.3rem;height:2.3rem;border-radius:50%;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:1.15rem;cursor:pointer;line-height:1}
-#reactToggle:hover{background:rgba(0,0,0,.75)}
-.reactPicker{position:absolute;right:0;bottom:2.9rem;background:rgba(15,15,17,.95);border:1px solid var(--line);border-radius:14px;padding:.5rem;display:grid;grid-template-columns:repeat(5,1fr);gap:.1rem;width:11.5rem}
-.reactPicker button{background:transparent;border:0;font-size:1.3rem;padding:.3rem;border-radius:8px;cursor:pointer;line-height:1.4}
-.reactPicker button:hover{background:rgba(255,255,255,.12)}
+.reactBar{display:flex;gap:.3rem}
+.reactBar button{background:transparent;border:1px solid var(--line);border-radius:8px;font-size:1.15rem;width:2.1rem;height:2.1rem;cursor:pointer;line-height:1}
+.reactBar button:hover{background:var(--panel2)}
+.reactPickGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:.35rem}
+.reactPick{background:var(--bg);border:1px solid var(--line);border-radius:10px;font-size:1.35rem;padding:.5rem;cursor:pointer;line-height:1}
+.reactPick.on{border-color:var(--accent);background:var(--panel2)}
 .floatEmoji{position:absolute;bottom:8%;font-size:2rem;pointer-events:none;z-index:5;animation:floatUp 3s ease-out forwards}
 @keyframes floatUp{0%{transform:translateY(0) scale(.5);opacity:0}12%{opacity:1;transform:translateY(-8%) scale(1)}100%{transform:translateY(-340%) scale(1.15);opacity:0}}
 #roomStageSlot{aspect-ratio:16/9;margin-bottom:1.4rem}
@@ -263,10 +262,6 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
       <button type="button" id="miniExpand" title="กลับไปดูเต็มจอ">⤢</button>
       <button type="button" id="miniClose" title="ปิด">✕</button>
     </div>
-    <div class="reactDock" id="reactDock">
-      <div class="reactPicker" id="reactPicker" hidden></div>
-      <button type="button" id="reactToggle" title="ส่งรีแอ็คชั่น">😀</button>
-    </div>
   </div>
 </div>
 
@@ -319,7 +314,8 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
         <div class="playbar">
           <button class="btn ghost small" id="fsBtn" type="button">เต็มจอ</button>
           <button class="btn" id="playPauseBtn" type="button" disabled>▶ เล่น</button>
-          <button class="btn ghost small" id="transferHostBtn" type="button" hidden>โอนหัวหน้าห้อง</button>
+          <div class="reactBar" id="reactBar"></div>
+          <button class="btn ghost small" id="reactEditBtn" type="button" title="เลือกอิโมจิลัด">✎</button>
           <span class="muted" id="hostInfo"></span>
           <div class="volCtrl">
             <button type="button" id="muteBtn" title="ปิด/เปิดเสียง">🔊</button>
@@ -331,6 +327,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
         <div class="roomtools">
           <p id="lastAction" class="muted"></p>
           <div class="row" id="voteRow">
+            <button class="btn ghost small" id="transferHostBtn" type="button" hidden>โอนหัวหน้าห้อง</button>
             <button class="btn ghost" id="startVoteBtn" type="button">เปิดโหวตหัวหน้าห้อง</button>
             <span class="muted" id="voteStatus" hidden></span>
           </div>
@@ -485,7 +482,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.20"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.21"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -798,7 +795,6 @@ async function openRoom(id) {
   $("#addTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.atab === "add" ? "true" : "false"));
   $("#hostInfo").textContent = ""; $("#playPauseBtn").disabled = true; $("#playPauseBtn").textContent = "▶ เล่น"; $("#transferHostBtn").hidden = true;
   $("#seekSlider").disabled = true; $("#seekSlider").value = 0; $("#curTime").textContent = "0:00"; $("#durTime").textContent = "0:00";
-  $("#reactDock").hidden = true; $("#reactPicker").hidden = true;
   $("#startVoteBtn").hidden = false; $("#voteStatus").hidden = true;
   room = { id, unsubs: [], player: null, ready: false, state: null, queueItems: [], offset: 0, applying: false, joined: false, pos: null, titles: {}, presence: {}, hostUid: null, isHost: false, voteActive: false, voteVotes: {}, voteEndsAt: null, historyItems: [] };
   const r = room;
@@ -877,7 +873,7 @@ function createPlayer(st) {
     playerVars: { playsinline: 1, rel: 0, modestbranding: 1, controls: 0, disablekb: 1 },
     events: {
       onReady: () => {
-        r.ready = true; $("#joinOverlay").hidden = true; $("#reactDock").hidden = false; if (r.state?.videoId) applyState(r.state);
+        r.ready = true; $("#joinOverlay").hidden = true; if (r.state?.videoId) applyState(r.state);
         applySavedVolume(r.player);
         if ("mediaSession" in navigator) {
           navigator.mediaSession.metadata = new MediaMetadata({ title: $("#roomTitle").textContent || "กำลังฉาย", artist: site.siteName || "โรงหนัง" });
@@ -1052,15 +1048,33 @@ $("#muteBtn").addEventListener("click", () => {
 
 /* ---------- รีแอ็คชั่นอิโมจิลอย ---------- */
 const REACT_EMOJIS = ["😂", "❤️", "😮", "😢", "😡", "👍", "👎", "🔥", "🎉", "😱", "😍", "🤔", "👏", "💀", "😴", "🥹", "🙌", "✨", "💯", "😭", "🤣", "😅", "🫡", "😎", "🥳"];
-$("#reactPicker").innerHTML = REACT_EMOJIS.map(em => `<button type="button" data-emoji="${em}">${em}</button>`).join("");
-$("#reactToggle").addEventListener("click", () => { $("#reactPicker").hidden = !$("#reactPicker").hidden; });
-$("#reactPicker").addEventListener("click", e => {
-  const b = e.target.closest("[data-emoji]"); if (!b || !room) return;
-  $("#reactPicker").hidden = true;
-  const rf = push(ref(rdb, `rooms/${room.id}/reactions`));
-  set(rf, { emoji: b.dataset.emoji, uid: me.uid })
-    .then(() => setTimeout(() => remove(rf).catch(() => { }), 4000))
-    .catch(ex => toast(explain(ex), "err"));
+const DEFAULT_SHORTCUTS = ["😂", "❤️", "🔥", "👍", "😱"];
+function loadReactShortcuts() { try { const s = JSON.parse(localStorage.getItem("reactShortcuts") || "null"); return Array.isArray(s) && s.length ? s.slice(0, 5) : DEFAULT_SHORTCUTS; } catch { return DEFAULT_SHORTCUTS; } }
+function saveReactShortcuts(list) { try { localStorage.setItem("reactShortcuts", JSON.stringify(list)); } catch { } }
+function renderReactBar() { $("#reactBar").innerHTML = loadReactShortcuts().map(em => `<button type="button" data-emoji="${em}">${em}</button>`).join(""); }
+renderReactBar();
+function sendReaction(emoji) {
+  const r = room; if (!r?.joined) return;
+  const rf = push(ref(rdb, `rooms/${r.id}/reactions`));
+  set(rf, { emoji, uid: me.uid }).then(() => setTimeout(() => remove(rf).catch(() => { }), 4000)).catch(ex => toast(explain(ex), "err"));
+}
+$("#reactBar").addEventListener("click", e => {
+  const b = e.target.closest("[data-emoji]"); if (!b) return;
+  sendReaction(b.dataset.emoji);
+});
+$("#reactEditBtn").addEventListener("click", () => {
+  const current = loadReactShortcuts();
+  askDialog("เลือกอิโมจิลัด (สูงสุด 5 อัน)",
+    `<div class="reactPickGrid">${REACT_EMOJIS.map(em => `<button type="button" class="reactPick ${current.includes(em) ? "on" : ""}" data-emoji="${em}">${em}</button>`).join("")}</div>`,
+    async () => {
+      const chosen = [...$("#dlgFields").querySelectorAll(".reactPick.on")].map(b => b.dataset.emoji);
+      if (!chosen.length) throw new Error("เลือกอย่างน้อย 1 อิโมจิ");
+      saveReactShortcuts(chosen); renderReactBar(); toast("บันทึกอิโมจิลัดแล้ว");
+    });
+  $("#dlgFields").querySelectorAll(".reactPick").forEach(b => b.addEventListener("click", () => {
+    if (!b.classList.contains("on") && $("#dlgFields").querySelectorAll(".reactPick.on").length >= 5) return toast("เลือกได้สูงสุด 5 อัน", "err");
+    b.classList.toggle("on");
+  }));
 });
 function spawnFloatEmoji(emoji) {
   if (!emoji) return;
