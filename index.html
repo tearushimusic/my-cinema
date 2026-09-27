@@ -37,7 +37,7 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 /* แถบบน */
 #topbar{display:flex;align-items:center;gap:.8rem;padding:.6rem 1.2rem;background:var(--bg2);border-bottom:1px solid var(--accent2);flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:.6rem;font-size:1.2rem;color:var(--accent);text-decoration:none;margin-right:auto}
-.brand img{height:34px;width:auto;border-radius:4px}
+.brand img{height:80px;width:auto;border-radius:4px}
 #topbar nav{display:flex;gap:.5rem;align-items:center}
 #topbar a.nav{color:var(--ivory);text-decoration:none;padding:.3rem .7rem;border-radius:8px}
 #topbar a.nav:hover{background:var(--panel)}
@@ -203,6 +203,12 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 .tag.off{border-color:#8a3d3d;color:var(--bad)}
 .acc .acts{display:flex;gap:.4rem;flex-wrap:wrap}
 .logline{font-size:.88rem;padding:.35rem 0;border-top:1px solid var(--line);display:flex;gap:.6rem;flex-wrap:wrap}
+.sysRow{display:grid;grid-template-columns:180px 1fr 70px;align-items:center;gap:.7rem;margin-bottom:.8rem}
+.sysLabel{font-size:.88rem;color:var(--mute)}
+.sysBar{height:.55rem;background:var(--bg);border-radius:999px;overflow:hidden}
+.sysBarFill{height:100%;background:var(--accent);width:0%;transition:width .5s ease}
+.sysVal{font-size:.85rem;text-align:right;white-space:nowrap}
+@media (max-width:560px){.sysRow{grid-template-columns:1fr;gap:.3rem}.sysVal{text-align:left}}
 .logline time{color:var(--mute);min-width:150px}
 dialog{background:var(--panel);color:var(--ivory);border:1px solid var(--line);border-radius:24px;padding:1.4rem;width:min(420px,92vw)}
 dialog[open]{animation:dlgPop .16s cubic-bezier(.2,.8,.2,1)}
@@ -289,15 +295,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <!-- ฮับ -->
 <section id="view-hub" hidden>
   <div class="wrap">
-    <div class="head"><h2>โรงที่เปิดอยู่</h2></div>
-    <form class="box" id="cinemaForm" hidden>
-      <div class="row">
-        <div><label for="cName">ชื่อโรง</label><input id="cName" maxlength="40" required></div>
-        <div><label for="cDesc">คำอธิบายสั้นๆ (ไม่ใส่ก็ได้)</label><input id="cDesc" maxlength="80"></div>
-        <div><label for="cCode">รหัสโรงหนัง (ไม่ใส่ก็ได้)</label><input id="cCode" maxlength="20"></div>
-        <button class="btn" type="submit">เพิ่มโรง</button>
-      </div>
-    </form>
+    <div class="head"><h2>โรงที่เปิดอยู่</h2><button class="btn" id="addCinemaBtn" type="button" hidden>+ เพิ่มโรงหนัง</button></div>
     <div class="tickets" id="ticketList"></div>
   </div>
 </section>
@@ -326,8 +324,10 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
           <div class="volCtrl">
             <button type="button" id="muteBtn" title="ปิด/เปิดเสียง">🔊</button>
             <input type="range" id="volSlider" min="0" max="100" value="100" title="ระดับเสียง">
+            <button type="button" id="volDownBtn" title="ลดเสียง 2%">−</button>
             <input type="number" id="volNum" min="0" max="100" value="100" title="พิมพ์ระดับเสียงเอง">
             <span class="muted">%</span>
+            <button type="button" id="volUpBtn" title="เพิ่มเสียง 2%">+</button>
           </div>
         </div>
         <div class="reactGridWrap" id="reactGridWrap" hidden>
@@ -407,6 +407,7 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
       <button role="tab" data-tab="accounts" aria-selected="true">บัญชีผู้ใช้</button>
       <button role="tab" data-tab="site" aria-selected="false">เว็บไซต์</button>
       <button role="tab" data-tab="logs" id="tabLogsBtn" aria-selected="false" hidden>ประวัติการใช้งาน</button>
+      <button role="tab" data-tab="sysinfo" aria-selected="false">ข้อมูลระบบ</button>
     </div>
 
     <div class="tab" id="tab-accounts">
@@ -438,6 +439,19 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
           <button class="btn ghost small" id="logsRefresh" type="button">รีเฟรช</button>
           <button class="btn danger small" id="logsClear" type="button">ลบรายการเก่ากว่า 30 วัน</button></div>
         <div id="logList"></div>
+      </div>
+    </div>
+
+    <div class="tab" id="tab-sysinfo" hidden>
+      <div class="box">
+        <h3>ข้อมูลระบบ</h3>
+        <div class="sysRow"><div class="sysLabel">บัญชีผู้ใช้ทั้งหมด</div><div class="sysBar"><div class="sysBarFill" id="sysAccFill"></div></div><div class="sysVal" id="sysAccVal">-</div></div>
+        <div class="sysRow"><div class="sysLabel">โรงหนังทั้งหมด</div><div class="sysBar"><div class="sysBarFill" id="sysCineFill"></div></div><div class="sysVal" id="sysCineVal">-</div></div>
+        <div class="sysRow"><div class="sysLabel">เพลย์ลิสต์ส่วนตัวของฉัน</div><div class="sysBar"><div class="sysBarFill" id="sysPlFill"></div></div><div class="sysVal" id="sysPlVal">-</div></div>
+        <div class="sysRow"><div class="sysLabel">ประวัติการใช้งานที่บันทึกไว้</div><div class="sysBar"><div class="sysBarFill" id="sysLogFill"></div></div><div class="sysVal" id="sysLogVal">-</div></div>
+        <div class="sysRow"><div class="sysLabel">พื้นที่จำในเบราว์เซอร์นี้</div><div class="sysBar"><div class="sysBarFill" id="sysLsFill"></div></div><div class="sysVal" id="sysLsVal">-</div></div>
+        <p class="muted" style="margin-top:1.1rem;font-size:.85rem">ตัวเลขข้างบนเทียบกับเป้าหมายที่วางแผนไว้ตอนแรก (เช่น ไม่เกิน 50 บัญชี) ไม่ใช่โควตาจริงของ Firebase — เช็คโควตาการใช้งานจริงได้ที่ Firebase Console โดยตรง</p>
+        <p class="muted" style="font-size:.85rem">เวอร์ชันเว็บ: <span id="sysVerVal"></span> · โปรเจกต์: <span id="sysProjVal"></span></p>
       </div>
     </div>
     <span id="verTag"></span>
@@ -485,7 +499,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
   EmailAuthProvider, reauthenticateWithCredential, updatePassword, setPersistence, browserLocalPersistence, browserSessionPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, orderBy, limit,
-  where, onSnapshot, getDocs, writeBatch, serverTimestamp, Timestamp }
+  where, onSnapshot, getDocs, getCountFromServer, writeBatch, serverTimestamp, Timestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getDatabase, ref, set, remove, onValue, onChildAdded, onDisconnect, push, update, runTransaction, serverTimestamp as rtdbTs }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -500,7 +514,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.24"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.25"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -725,25 +739,27 @@ onAuthStateChanged(auth, async user => {
 let hubCache = [];
 function openHub() {
   show("hub");
-  $("#cinemaForm").hidden = !isAdmin();
+  $("#addCinemaBtn").hidden = !isAdmin();
   hubUnsub = onSnapshot(query(collection(db, "cinemas"), orderBy("createdAt", "asc")), snap => {
     hubCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const el = $("#ticketList");
-    if (!hubCache.length) { el.innerHTML = `<div class="empty">ยังไม่มีโรงหนัง${isAdmin() ? " เพิ่มโรงแรกด้วยฟอร์มด้านบนได้เลย" : " รอแอดมินเปิดโรงก่อนนะ"}</div>`; return; }
+    if (!hubCache.length) { el.innerHTML = `<div class="empty">ยังไม่มีโรงหนัง${isAdmin() ? " กด \"+ เพิ่มโรงหนัง\" เพื่อเปิดโรงแรกได้เลย" : " รอแอดมินเปิดโรงก่อนนะ"}</div>`; return; }
     el.innerHTML = hubCache.map(c => `<div class="ticket"><div class="main"><h3>${esc(c.name)}</h3><p class="muted">${esc(c.desc || "")}</p></div>
         <div class="stub"><button class="btn" data-enter="${esc(c.id)}" type="button">เข้าโรง</button>
         ${isAdmin() ? `<button class="btn ghost small" data-edit="${esc(c.id)}" type="button">แก้ไข</button>` : ""}</div></div>`).join("");
   }, ex => toast(explain(ex), "err"));
 }
-$("#cinemaForm").addEventListener("submit", async e => {
-  e.preventDefault();
-  const name = $("#cName").value.trim(), desc = $("#cDesc").value.trim(), code = $("#cCode").value.trim();
-  if (!name) return;
-  try {
-    const payload = { name, desc, createdBy: me.username, createdAt: serverTimestamp() };
-    if (code) payload.code = code;
-    await addDoc(collection(db, "cinemas"), payload); logEvent("cinema_add", name); e.target.reset();
-  } catch (ex) { toast(explain(ex), "err"); }
+$("#addCinemaBtn").addEventListener("click", () => {
+  askDialog("เพิ่มโรงหนัง", `
+    <label>ชื่อโรงหนัง</label><input name="name" maxlength="40" required>
+    <label>รายละเอียด (ไม่ใส่ก็ได้)</label><input name="desc" maxlength="80">
+    <label>รหัสโรงหนัง (ไม่ใส่ก็ได้)</label><input name="code" maxlength="20">`,
+    async f => {
+      const name = f.get("name").trim(); if (!name) throw new Error("กรอกชื่อโรงหนัง");
+      const payload = { name, desc: f.get("desc").trim(), createdBy: me.username, createdAt: serverTimestamp() };
+      const code = f.get("code").trim(); if (code) payload.code = code;
+      await addDoc(collection(db, "cinemas"), payload); logEvent("cinema_add", name); toast("เพิ่มโรงหนังแล้ว");
+    });
 });
 function enterCinema(id) {
   const c = hubCache.find(x => x.id === id); if (!c) return;
@@ -822,6 +838,12 @@ async function openRoom(id) {
   // ติดตามสถานะห้องและคิวตลอดเวลา ไม่ต้องรอกดเข้าร่วมก่อน (เพื่อให้เพิ่มคลิปเข้าคิวได้ทันที)
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/state`), s => onRemoteState(s.val())));
   r.unsubs.push(onValue(ref(rdb, `rooms/${id}/queue`), s => onQueueUpdate(s.val())));
+  // แสดงคนที่อยู่ในห้องได้ทันที ไม่ต้องรอกดเข้าร่วมก่อน
+  r.unsubs.push(onValue(ref(rdb, `rooms/${id}/presence`), s => {
+    r.presence = s.val() || {};
+    $("#seatCount").textContent = Object.keys(r.presence).length;
+    renderSeats();
+  }));
   populatePlaylistPicker();
   updateStageMode();
 }
@@ -836,11 +858,6 @@ async function joinRoom() {
   const pref = ref(rdb, `rooms/${r.id}/presence/${me.uid}`); r.pref = pref;
   r.unsubs.push(onValue(ref(rdb, ".info/connected"), s => {
     if (s.val()) { set(pref, { name: me.displayName || me.username }).catch(() => { }); onDisconnect(pref).remove(); }
-  }));
-  r.unsubs.push(onValue(ref(rdb, `rooms/${r.id}/presence`), s => {
-    r.presence = s.val() || {};
-    $("#seatCount").textContent = Object.keys(r.presence).length;
-    renderSeats();
   }));
   // หัวหน้าห้อง: บัญชีแรกที่เข้ามาในห้อง (ตอนห้องยังไม่มีใครถือสิทธิ์) จะได้สิทธิ์เล่น/หยุดคลิปแต่ผู้เดียว
   const hostRef = ref(rdb, `rooms/${r.id}/host`);
@@ -1067,6 +1084,8 @@ function setVolumeTo(v) {
 $("#volSlider").addEventListener("input", e => setVolumeTo(Number(e.target.value)));
 $("#volNum").addEventListener("input", e => { if (e.target.value !== "") setVolumeTo(Number(e.target.value)); });
 $("#volNum").addEventListener("blur", e => { if (e.target.value === "") setVolumeTo(0); });
+$("#volUpBtn").addEventListener("click", () => setVolumeTo(Number($("#volSlider").value) + 2));
+$("#volDownBtn").addEventListener("click", () => setVolumeTo(Number($("#volSlider").value) - 2));
 $("#muteBtn").addEventListener("click", () => {
   const r = room; if (!r?.player) return;
   const willMute = !r.player.isMuted();
@@ -1420,9 +1439,10 @@ function openSettings() {
   switchTab("accounts"); loadAccounts();
 }
 function switchTab(t) {
-  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
-  for (const n of ["accounts", "site", "logs"]) $("#tab-" + n).hidden = n !== t;
+  $("#settingsTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  for (const n of ["accounts", "site", "logs", "sysinfo"]) $("#tab-" + n).hidden = n !== t;
   if (t === "logs") loadLogs();
+  if (t === "sysinfo") loadSysInfo();
 }
 document.querySelector("#settingsTabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) switchTab(b.dataset.tab); });
 
@@ -1573,6 +1593,33 @@ async function loadLogs() {
   } catch (ex) { toast(explain(ex), "err"); }
 }
 $("#logsRefresh").addEventListener("click", loadLogs);
+async function loadSysInfo() {
+  $("#sysVerVal").textContent = APP_VERSION; $("#sysProjVal").textContent = firebaseConfig.projectId || "-";
+  function setBar(fillId, valId, count, target) {
+    $(fillId).style.width = Math.min(100, Math.round((count / target) * 100)) + "%";
+    $(valId).textContent = `${count} / ${target}`;
+  }
+  try {
+    const [accSnap, cineSnap, plSnap] = await Promise.all([
+      getCountFromServer(collection(db, "accounts")),
+      getCountFromServer(collection(db, "cinemas")),
+      getCountFromServer(query(collection(db, "playlists"), where("ownerUid", "==", me.uid)))
+    ]);
+    setBar("#sysAccFill", "#sysAccVal", accSnap.data().count, 50);
+    setBar("#sysCineFill", "#sysCineVal", cineSnap.data().count, 20);
+    setBar("#sysPlFill", "#sysPlVal", plSnap.data().count, 20);
+  } catch (ex) { toast(explain(ex), "err"); }
+  if (isSuper()) {
+    try { const logSnap = await getCountFromServer(collection(db, "logs")); setBar("#sysLogFill", "#sysLogVal", logSnap.data().count, 2000); }
+    catch { $("#sysLogVal").textContent = "ดูไม่ได้"; }
+  } else { $("#sysLogVal").textContent = "เฉพาะซุปเปอร์แอดมิน"; }
+  try {
+    let bytes = 0;
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); bytes += k.length + (localStorage.getItem(k) || "").length; }
+    const kb = Math.round(bytes / 1024 * 10) / 10;
+    setBar("#sysLsFill", "#sysLsVal", kb, 5000); $("#sysLsVal").textContent = `${kb} KB / ~5 MB`;
+  } catch { $("#sysLsVal").textContent = "-"; }
+}
 $("#logsClear").addEventListener("click", async () => {
   const ok = await askConfirm("ลบประวัติเก่า", "ลบรายการที่เก่ากว่า 30 วัน ?", { okLabel: "ลบรายการ" });
   if (!ok) return;
