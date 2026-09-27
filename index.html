@@ -148,9 +148,18 @@ label{display:block;font-size:.9rem;color:var(--mute);margin:.7rem 0 .25rem}
 /* จัดวางฝั่งขวา: กำลังฉาย + คิว */
 .roomGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
 @media (min-width:900px){.roomGrid{grid-template-columns:1fr 340px;align-items:start}}
+.hubGrid{display:grid;grid-template-columns:1fr;gap:1.4rem}
+@media (min-width:900px){.hubGrid{grid-template-columns:1fr 340px;align-items:start}}
+.hubSide{display:flex;flex-direction:column;gap:1rem}
 #view-room .wrap{max-width:min(1700px,97vw)}
 .roomSide{display:flex;flex-direction:column;gap:1rem}
 .sideBox{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:1.1rem 1.2rem}
+.nowPlayingBox{position:relative;overflow:hidden;transition:border-color .3s ease,box-shadow .3s ease}
+.nowPlayingBox.is-playing{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 26px -4px var(--accent);animation:npGlow 2.2s ease-in-out infinite}
+.nowPlayingBox.is-playing::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 30%,color-mix(in srgb,var(--accent) 22%,transparent) 50%,transparent 70%);background-size:220% 100%;animation:npSheen 2.6s linear infinite;pointer-events:none}
+@keyframes npGlow{0%,100%{box-shadow:0 0 0 1px var(--accent),0 0 18px -4px var(--accent)}50%{box-shadow:0 0 0 1px var(--accent),0 0 34px -2px var(--accent)}}
+@keyframes npSheen{from{background-position:120% 0}to{background-position:-20% 0}}
+@media (prefers-reduced-motion:reduce){.nowPlayingBox.is-playing{animation:none}.nowPlayingBox.is-playing::before{display:none}}
 .sideBox h3{margin-bottom:.6rem}
 .sideBox form,.sideBox>div{display:flex;flex-direction:column;gap:.5rem}
 .sideBox .btn{margin-top:.2rem}
@@ -238,7 +247,6 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
   <a class="brand" href="#/"><img id="brandLogo" alt="" hidden><span id="brandName">โรงหนังของเรา</span></a>
   <nav>
     <a class="nav" href="#/">โรงหนัง</a>
-    <a class="nav" href="#/playlists">เพลย์ลิสต์ของฉัน</a>
     <a class="nav" id="navSettings" href="#/settings" hidden>ตั้งค่า</a>
     <span class="connStatus connecting" id="connStatus"><i></i><span id="connLbl">กำลังเชื่อมต่อ...</span></span>
     <button class="iconBtn" id="refreshBtn" type="button" title="รีเฟรชข้อมูล" aria-label="รีเฟรชข้อมูล">↻</button>
@@ -295,8 +303,30 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 <!-- ฮับ -->
 <section id="view-hub" hidden>
   <div class="wrap">
-    <div class="head"><h2>โรงที่เปิดอยู่</h2><button class="btn" id="addCinemaBtn" type="button" hidden>+ เพิ่มโรงหนัง</button></div>
-    <div class="tickets" id="ticketList"></div>
+    <div class="hubGrid">
+      <div class="hubMain">
+        <div class="head"><h2>โรงที่เปิดอยู่</h2><button class="btn" id="addCinemaBtn" type="button" hidden>+ เพิ่มโรงหนัง</button></div>
+        <div class="tickets" id="ticketList"></div>
+      </div>
+      <aside class="hubSide">
+        <div class="sideBox" id="plListWrap">
+          <div class="row" style="margin-bottom:.8rem"><h3 style="flex:1 1 auto;margin:0">เพลย์ลิสต์ของฉัน</h3>
+            <button class="btn small" id="addPlaylistBtn" type="button">+ สร้าง</button></div>
+          <div id="plList"></div>
+        </div>
+        <div class="sideBox" id="plDetailWrap" hidden>
+          <div class="row" style="margin-bottom:.6rem"><button class="btn ghost small" id="plBackBtn" type="button">← กลับ</button>
+            <h3 id="plDetailName" style="flex:1;margin:0"></h3>
+            <button class="btn danger small" id="plDeleteBtn" type="button">ลบ</button></div>
+          <form id="plAddForm">
+            <label for="plUrl">ลิงก์ YouTube</label>
+            <input id="plUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+            <button class="btn" type="submit">เพิ่มในเพลย์ลิสต์</button>
+          </form>
+          <div id="plItems" style="margin-top:1rem"></div>
+        </div>
+      </aside>
+    </div>
   </div>
 </section>
 
@@ -346,6 +376,10 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
         </div>
       </div>
       <aside class="roomSide">
+        <div class="sideBox nowPlayingBox" id="nowPlayingBox">
+          <h3>กำลังฉาย</h3>
+          <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
+        </div>
         <div class="sideBox">
           <div class="tabs" role="tablist" id="addTabs">
             <button role="tab" data-atab="add" aria-selected="true" type="button">เพิ่มคลิป</button>
@@ -368,10 +402,6 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
           </div>
         </div>
         <div class="sideBox">
-          <h3>กำลังฉาย</h3>
-          <p id="nowPlaying" class="muted">ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย</p>
-        </div>
-        <div class="sideBox">
           <h3>คิวถัดไป (<span id="queueCount">0</span>)</h3>
           <ol class="queue" id="queueList"></ol>
         </div>
@@ -381,24 +411,6 @@ dialog p.msg{margin:.4rem 0 0;color:var(--mute)}
 </section>
 
 <!-- เพลย์ลิสต์ส่วนตัว -->
-<section id="view-playlists" hidden>
-  <div class="wrap" id="plListWrap">
-    <div class="head"><h2>เพลย์ลิสต์ของฉัน</h2>
-      <button class="btn" id="addPlaylistBtn" type="button">+ สร้างเพลย์ลิสต์</button></div>
-    <div id="plList"></div>
-  </div>
-  <div class="wrap" id="plDetailWrap" hidden>
-    <div class="head"><button class="btn ghost small" id="plBackBtn" type="button">← กลับ</button>
-      <h2 id="plDetailName" style="flex:1"></h2>
-      <button class="btn danger small" id="plDeleteBtn" type="button">ลบเพลย์ลิสต์</button></div>
-    <form class="row" id="plAddForm">
-      <div><label for="plUrl">ลิงก์ YouTube</label><input id="plUrl" placeholder="https://www.youtube.com/watch?v=..." required></div>
-      <button class="btn" type="submit">เพิ่มในเพลย์ลิสต์</button>
-    </form>
-    <div id="plItems" style="margin-top:1rem"></div>
-  </div>
-</section>
-
 <!-- ตั้งค่า -->
 <section id="view-settings" hidden>
   <div class="wrap">
@@ -514,7 +526,7 @@ const firebaseConfig = {
 };
 const EMAIL_DOMAIN = "cinema.app"; // โดเมนสมมติสำหรับแปลง username เป็นอีเมล
 /* =================================================================== */
-const APP_VERSION = "v0.25"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
+const APP_VERSION = "v0.26"; // อัปเดตเลขนี้ทุกครั้งที่ปรับปรุงเว็บ
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app), db = getFirestore(app), rdb = getDatabase(app);
@@ -526,7 +538,25 @@ const colorOf = n => { let h = 0; for (const c of String(n)) h = (h * 31 + c.cha
 const mkEmail = (u, ver) => `${u}.v${ver}@${EMAIL_DOMAIN}`;
 const roleLabel = r => ({ super: "ซุปเปอร์แอดมิน", admin: "แอดมิน", member: "สมาชิก" }[r] || r);
 
-let me = null, site = {}, pendingLoginLog = false, hubUnsub = null, room = null;
+let me = null, site = {}, pendingLoginLog = false, hubUnsub = null, room = null, sessionUnsub = null;
+function getMySessionId() {
+  let id = sessionStorage.getItem("cinemaSessionId");
+  if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random()); sessionStorage.setItem("cinemaSessionId", id); }
+  return id;
+}
+function claimSession(uid) {
+  const myId = getMySessionId();
+  set(ref(rdb, `sessions/${uid}`), myId).catch(() => { });
+  if (sessionUnsub) sessionUnsub();
+  sessionUnsub = onValue(ref(rdb, `sessions/${uid}`), s => {
+    const cur = s.val();
+    if (cur && cur !== myId) {
+      toast("บัญชีนี้ถูกใช้ล็อกอินที่อื่น ระบบออกจากระบบให้อัตโนมัติ", "err");
+      if (sessionUnsub) { sessionUnsub(); sessionUnsub = null; }
+      closeStage(); signOut(auth);
+    }
+  });
+}
 const isAdmin = () => me && (me.role === "admin" || me.role === "super");
 const isSuper = () => me && me.role === "super";
 const canManage = a => isSuper() ? a.role !== "super" : (me?.role === "admin" && a.role === "member");
@@ -574,7 +604,7 @@ function applySite() {
 async function loadSite() { try { const s = await getDoc(doc(db, "settings", "site")); site = s.exists() ? s.data() : {}; } catch { site = {}; } applySite(); }
 
 /* ---------- หน้า/เส้นทาง ---------- */
-function show(v) { for (const n of ["login", "hub", "room", "settings", "playlists"]) $("#view-" + n).hidden = n !== v; document.body.dataset.view = v; }
+function show(v) { for (const n of ["login", "hub", "room", "settings"]) $("#view-" + n).hidden = n !== v; document.body.dataset.view = v; }
 function renderChrome() {
   $("#topbar").hidden = !me;
   if (me) {
@@ -591,7 +621,6 @@ function route() {
   if (room && targetRoomId && targetRoomId !== room.id) closeStage(); // ไปห้องอื่น ต้องปิดห้องเดิมก่อน
   if (targetRoomId) { if (room && room.id === targetRoomId) show("room"); else openRoom(targetRoomId); }
   else if (h === "#/settings" && isAdmin()) openSettings();
-  else if (h === "#/playlists") openPlaylists();
   else openHub();
   updateStageMode();
 }
@@ -693,7 +722,7 @@ profileBtn.addEventListener("click", e => {
 document.addEventListener("click", e => { if (!e.target.closest(".profileMenu")) closeProfileMenu(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeProfileMenu(); });
 
-$("#menuLogout").addEventListener("click", () => { closeProfileMenu(); signOut(auth); });
+$("#menuLogout").addEventListener("click", () => { closeProfileMenu(); closeStage(); signOut(auth); });
 
 $("#menuRename").addEventListener("click", () => {
   closeProfileMenu();
@@ -722,7 +751,7 @@ $("#menuPassword").addEventListener("click", () => {
 });
 
 onAuthStateChanged(auth, async user => {
-  if (!user) { me = null; renderChrome(); return route(); }
+  if (!user) { me = null; if (sessionUnsub) { sessionUnsub(); sessionUnsub = null; } renderChrome(); return route(); }
   try {
     const s = await getDoc(doc(db, "accounts", user.uid));
     if (!s.exists() || s.data().status !== "active") {
@@ -731,7 +760,8 @@ onAuthStateChanged(auth, async user => {
     me = { uid: user.uid, ...s.data() };
   } catch (ex) { await signOut(auth); $("#loginErr").textContent = explain(ex); return; }
   renderChrome();
-  if (pendingLoginLog) { pendingLoginLog = false; logEvent("login"); }
+  claimSession(user.uid);
+  if (pendingLoginLog) { pendingLoginLog = false; logEvent("login"); if (location.hash !== "#/" && location.hash !== "") location.hash = "#/"; }
   route();
 });
 
@@ -748,6 +778,7 @@ function openHub() {
         <div class="stub"><button class="btn" data-enter="${esc(c.id)}" type="button">เข้าโรง</button>
         ${isAdmin() ? `<button class="btn ghost small" data-edit="${esc(c.id)}" type="button">แก้ไข</button>` : ""}</div></div>`).join("");
   }, ex => toast(explain(ex), "err"));
+  loadMyPlaylists();
 }
 $("#addCinemaBtn").addEventListener("click", () => {
   askDialog("เพิ่มโรงหนัง", `
@@ -824,6 +855,7 @@ async function openRoom(id) {
   $("#emptyOverlay").hidden = true;
   $("#seats").innerHTML = ""; $("#seatCount").textContent = "0"; $("#lastAction").textContent = "";
   $("#nowPlaying").textContent = "ยังไม่มีคลิป — เพิ่มลิงก์ด้านบนเพื่อเริ่มฉาย"; $("#miniTitle").textContent = ""; $("#queueList").innerHTML = ""; $("#queueCount").textContent = "0";
+  $("#nowPlayingBox").classList.remove("is-playing");
   $("#historyList").innerHTML = ""; $("#historyPane").hidden = true; $("#addPane").hidden = false; $("#historySearch").value = "";
   historyExpanded = false; historyQuery = "";
   $("#addTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.atab === "add" ? "true" : "false"));
@@ -1036,6 +1068,7 @@ function renderNowPlaying() {
   btn.textContent = st?.playing ? "⏸ หยุด" : "▶ เล่น";
   btn.disabled = !r?.isHost || !st?.videoId;
   $("#seekSlider").disabled = !r?.isHost || !st?.videoId;
+  $("#nowPlayingBox").classList.toggle("is-playing", !!(st?.playing && st?.videoId));
   renderSkipVoteUI();
 }
 function updateHostUI() {
@@ -1331,7 +1364,17 @@ async function playQueueItem(key, item) {
 }
 async function advanceQueue(endedVideoId) {
   const r = room; if (!r) return;
-  const next = r.queueItems[0]; if (!next) { publish({ playing: false }); return; }
+  const next = r.queueItems[0];
+  if (!next) {
+    // ไม่มีคลิปถัดไปแล้ว เคลียร์จอไม่ให้คลิปสุดท้ายค้างอยู่
+    try {
+      await runTransaction(ref(rdb, `rooms/${r.id}/state`), cur => {
+        if (!cur || cur.videoId !== endedVideoId) return cur;
+        return { videoId: "", playing: false, time: 0, updatedAt: rtdbTs(), by: me.username, byName: me.displayName || me.username };
+      });
+    } catch (ex) { toast(explain(ex), "err"); }
+    return;
+  }
   try {
     const res = await runTransaction(ref(rdb, `rooms/${r.id}/state`), cur => {
       if (!cur || cur.videoId !== endedVideoId) return cur; // มีคนอื่นจัดการไปแล้ว
@@ -1633,8 +1676,7 @@ $("#logsClear").addEventListener("click", async () => {
 
 /* ---------- เพลย์ลิสต์ส่วนตัว ---------- */
 let plCache = [], plCurrent = null;
-async function openPlaylists() {
-  show("playlists");
+async function loadMyPlaylists() {
   $("#plDetailWrap").hidden = true; $("#plListWrap").hidden = false;
   $("#plList").innerHTML = '<p class="muted">กำลังโหลด...</p>';
   try {
